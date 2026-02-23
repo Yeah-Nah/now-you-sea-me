@@ -1,0 +1,6 @@
+# Configuration file for oakd-camera-tracking pipeline. Adjust settings as needed for your environment and use case.
+dev_or_pi : "dev" # Set to "dev" for development environment, "pi" for Raspberry Pi deployment
+view_camera_feed : True # Whether to display the camera feed(s) in real-time. Boolean value.
+record_camera_feed : False # Whether to record the camera feed(s) to disk. Boolean value.
+detect_boats : False # Whether to run boat detection on the camera feed(s). Boolean value.
+camera_feed_output_dir : "output/recordings/" # Directory to save recorded camera feeds (if recording enabled). Default is "output/recordings/".
