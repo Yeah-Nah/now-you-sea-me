@@ -1,0 +1,159 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "boat-tracking-system"
+version = "0.1.0"
+description = "A system for detecting and tracking boats in video footage using YOLO"
+readme = "README.md"
+requires-python = ">=3.13"
+license = {text = "Apache License 2.0"}
+authors = [
+    {name = "Alex Helsham", email = "alexandra.helsham@gmail.com"}
+]
+classifiers = [
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+
+# Core dependencies from requirements.txt
+dependencies = [
+    "numpy>=1.24.0",
+    "opencv-python>=4.8.1.78",
+    "ultralytics>=8.0.0",
+    "loguru>=0.7.0",
+    "PyYAML>=6.0",
+    "matplotlib",
+    "mlflow>=2.10.0",
+    "depthai>=3.2.1",
+]
+
+# Optional dependencies for different use cases
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+    "pre-commit>=3.0.0",
+    "nbqa>=1.9.1",
+    "nbstripout>=0.8.1",
+]
+notebook = [
+    "ipython",
+    "jupyter",
+]
+
+# Console scripts (entry points for command-line tools)
+[project.scripts]
+oakd-camera-tracking = "main:main"
+
+# URLs for project information
+[project.urls]
+Homepage = "https://github.com/Yeah-Nah/where-the-hull-are-you"
+Repository = "https://github.com/Yeah-Nah/where-the-hull-are-you"
+Issues = "https://github.com/Yeah-Nah/where-the-hull-are-you/issues"
+
+# Setuptools configuration
+[tool.setuptools.packages.find]
+where = [
+    "oakd-camera-tracking/src",
+    "model-training/src",
+    "data-preparation/src",
+    "shared-tracking-metrics/src",
+    "."
+]
+include = [
+    "detection*",
+    "processors*",
+    "models*",
+    "evaluation*",
+    "training*",
+    "preprocessing*",
+    "tracking_metrics*",
+    "utils*",
+    "convert_model*"
+]
+exclude = ["tests*", "docs*", "*.egg-info"]
+
+# Ruff linter configuration
+[tool.ruff]
+# Set the maximum line length to 88 (Black's default)
+line-length = 88
+
+# Assume Python 3.13+
+target-version = "py313"
+
+# Exclude common directories from linting
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "*.egg-info",
+    "mlruns",
+]
+
+# Enable these rule sets
+[tool.ruff.lint]
+select = [
+    "A",      # flake8-builtins
+    "B",      # flake8-bugbear (find likely bugs)
+    "C4",     # flake8-comprehensions
+    "COM",    # flake8-commas
+    "D",      # pydocstyle (docstring conventions)
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort (import sorting)
+    "N",      # pep8-naming
+    "UP",     # pyupgrade (modernize Python code)
+    "Q",      # flake8-quotes
+    "RET",    # flake8-return
+    "SIM",    # flake8-simplify
+]
+
+# Allow unused variables when they start with an underscore
+ignore = [
+    "E501",   # Line too long (handled by formatter)
+    "COM812"
+]
+
+# Allow autofix for all enabled rules
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+# Ruff formatter configuration (Black-compatible)
+[tool.ruff.format]
+# Use double quotes for strings
+quote-style = "double"
+
+# Indent with spaces
+indent-style = "space"
+
+# Respect magic trailing commas
+skip-magic-trailing-comma = false
+
+# Automatically detect line endings
+line-ending = "auto"
+
+# pytest configuration
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --strict-markers"
+
+# MyPy type checker configuration
+[tool.mypy]
+python_version = "3.13"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false  # Set to true once you add type hints
+ignore_missing_imports = true  # Useful when dependencies don't have type stubs
