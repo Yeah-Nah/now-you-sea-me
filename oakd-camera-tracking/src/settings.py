@@ -36,11 +36,11 @@ class Settings:
         raw = str(
             self.pipeline_config.get("camera_feed_output_dir", "output/recordings/")
         )
-        return (self._root / raw).resolve()
+        return (self._root / raw).resolve()  # type: ignore[no-any-return]
 
     def _resolve_model_path(self) -> Path:
         model_filename = str(self.model_config.get("model", ""))
-        return (self._root / "models" / model_filename).resolve()
+        return (self._root / "models" / model_filename).resolve()  # type: ignore[no-any-return]
 
     def _validate(self) -> None:
         if self.inference_enabled and not self.model_path.exists():

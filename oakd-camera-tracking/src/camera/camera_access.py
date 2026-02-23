@@ -99,7 +99,7 @@ class CameraAccess:
         """
         if self._imu_queue is None:
             return None
-        return self._imu_queue.tryGet()  # type: ignore[return-value]
+        return self._imu_queue.tryGet()
 
     def stop(self) -> None:
         """Close the device connection and release resources."""
