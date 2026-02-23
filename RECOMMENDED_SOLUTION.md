@@ -26,9 +26,9 @@ You can start now by updating your existing DepthAI script on your current compu
 
 1. Add timestamp-based filenames for each recording (for example, `YYYYMMDD_HHMMSS.mp4`).
 2. Confirm the script creates the output folder if it does not exist.
-3. Record short test clips to validate: 
-   - file creation, 
-   - codec compatibility, 
+3. Record short test clips to validate:
+   - file creation,
+   - codec compatibility,
    - and playback quality.
 4. Log the recording settings you plan to use (resolution, FPS, codec).
 5. Keep the recording logic isolated in a function so it can be dropped into the Raspberry Pi setup unchanged.
