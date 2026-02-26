@@ -1,0 +1,7 @@
+# Configuration settings for YOLO model used in oakd-camera-tracking pipeline. Variable names should match those expected by the YOLO implementation.
+# I.e. can't change "conf" to "confidence_threshold" as YOLO expects "conf".
+conf: 0.7 # Detection confidence threshold
+classes: [0] # Class IDs to detect (e.g., 0 for person, 8 for boat)
+persist: True # Persist tracks across frames
+verbose: False # Disable verbose output
+model: "18ft_skiff_yolo11n_20260210_195721.pt" # Name of model file in models/ directory to train (without path)
