@@ -26,7 +26,7 @@ class CameraAccess:
     def __init__(self, record_gyroscope: bool, fps: int = 30) -> None:
         self._record_gyroscope = record_gyroscope
         self._fps = fps
-        self._device: dai.Device | None = None
+        self._pipeline: dai.Pipeline | None = None
         self._video_queue: dai.DataOutputQueue | None = None
         self._imu_queue: dai.DataOutputQueue | None = None
 
@@ -38,40 +38,32 @@ class CameraAccess:
         RuntimeError
             If no OAK-D device is found or the connection fails.
         """
-        pipeline = self._build_pipeline()
         try:
-            self._device = dai.Device(pipeline)
+            self._pipeline = dai.Pipeline()
         except RuntimeError as exc:
             logger.error(f"Failed to connect to OAK-D camera: {exc}")
             raise RuntimeError(f"OAK-D camera not found or unavailable: {exc}") from exc
-        self._video_queue = self._device.getOutputQueue(
-            name="video", maxSize=4, blocking=False
-        )
-        if self._record_gyroscope:
-            self._imu_queue = self._device.getOutputQueue(
-                name="imu", maxSize=50, blocking=False
-            )
+
+        self._build_pipeline()
+        self._pipeline.start()
         logger.info("OAK-D camera started successfully.")
 
-    def _build_pipeline(self) -> dai.Pipeline:
-        pipeline = dai.Pipeline()
+    def _build_pipeline(self) -> None:
+        """Build the DepthAI pipeline nodes and output queues using V3 API."""
+        if self._pipeline is None:
+            raise RuntimeError("Pipeline not initialized")
 
-        cam = pipeline.create(dai.node.ColorCamera)
-        cam.setResolution(dai.ColorCameraProperties.SensorResolution.THE_1080_P)
-        cam.setFps(self._fps)
-
-        xout = pipeline.create(dai.node.XLinkOut)
-        xout.setStreamName("video")
-        cam.video.link(xout.input)
+        cam = self._pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_A)
+        self._video_queue = cam.requestOutput(
+            (1920, 1080), fps=self._fps
+        ).createOutputQueue(maxSize=4, blocking=False)
 
         if self._record_gyroscope:
-            imu = pipeline.create(dai.node.IMU)
+            imu = self._pipeline.create(dai.node.IMU)
             imu.enableIMUSensor(dai.IMUSensor.GYROSCOPE_CALIBRATED, 100)
-            imu_xout = pipeline.create(dai.node.XLinkOut)
-            imu_xout.setStreamName("imu")
-            imu.out.link(imu_xout.input)
-
-        return pipeline
+            imu.setBatchReportThreshold(1)
+            imu.setMaxBatchReports(10)
+            self._imu_queue = imu.out.createOutputQueue(maxSize=50, blocking=False)
 
     def get_frame(self) -> NDArray[np.uint8] | None:
         """Pop the latest frame from the video queue.
@@ -108,7 +100,7 @@ class CameraAccess:
             gyro = imu_packet.gyroscope
             readings.append(
                 {
-                    "timestamp_s": gyro.timestamp.total_seconds(),
+                    "timestamp_s": gyro.getTimestamp().total_seconds(),
                     "x": gyro.x,
                     "y": gyro.y,
                     "z": gyro.z,
@@ -117,10 +109,10 @@ class CameraAccess:
         return readings or None
 
     def stop(self) -> None:
-        """Close the device connection and release resources."""
-        if self._device is not None:
-            self._device.close()
-            self._device = None
+        """Stop the pipeline and release resources."""
+        if self._pipeline is not None:
+            self._pipeline.stop()
+            self._pipeline = None
             logger.info("OAK-D camera stopped.")
 
     def __enter__(self) -> CameraAccess:
