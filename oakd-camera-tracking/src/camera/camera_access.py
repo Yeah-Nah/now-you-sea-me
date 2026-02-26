@@ -56,18 +56,18 @@ class CameraAccess:
     def _build_pipeline(self) -> dai.Pipeline:
         pipeline = dai.Pipeline()
 
-        cam: dai.node.ColorCamera = pipeline.create(dai.node.ColorCamera)
+        cam = pipeline.create(dai.node.ColorCamera)
         cam.setResolution(dai.ColorCameraProperties.SensorResolution.THE_1080_P)
         cam.setFps(self._fps)
 
-        xout: dai.node.XLinkOut = pipeline.create(dai.node.XLinkOut)
+        xout = pipeline.create(dai.node.XLinkOut)
         xout.setStreamName("video")
         cam.video.link(xout.input)
 
         if self._record_gyroscope:
-            imu: dai.node.IMU = pipeline.create(dai.node.IMU)
+            imu = pipeline.create(dai.node.IMU)
             imu.enableIMUSensor(dai.IMUSensor.GYROSCOPE_CALIBRATED, 100)
-            imu_xout: dai.node.XLinkOut = pipeline.create(dai.node.XLinkOut)
+            imu_xout = pipeline.create(dai.node.XLinkOut)
             imu_xout.setStreamName("imu")
             imu.out.link(imu_xout.input)
 
