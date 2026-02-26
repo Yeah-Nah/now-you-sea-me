@@ -60,7 +60,7 @@ class CameraAccess:
 
         if self._record_gyroscope:
             imu = self._pipeline.create(dai.node.IMU)
-            imu.enableIMUSensor(dai.IMUSensor.GYROSCOPE_CALIBRATED, 100)
+            imu.enableIMUSensor([dai.IMUSensor.GYROSCOPE_RAW], 100)
             imu.setBatchReportThreshold(1)
             imu.setMaxBatchReports(10)
             self._imu_queue = imu.out.createOutputQueue(maxSize=50, blocking=False)

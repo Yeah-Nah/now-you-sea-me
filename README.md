@@ -24,3 +24,9 @@ python run_pipeline.py
 ```
 
 Configure behavior in `configs/pipeline_config.yaml` (enable/disable inference, tracking, recording, live view, etc.)
+
+## Troubshooting
+
+#### The feed shuts down within a few seconds
+
+Likely a "brownout" and the unit doesn't have enough power. Ensure using a USB 3.0 cable and try plugging into the back of your computer instead of the top.
