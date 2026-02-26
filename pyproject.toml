@@ -48,7 +48,7 @@ notebook = [
 
 # Console scripts (entry points for command-line tools)
 [project.scripts]
-oakd-camera-tracking = "main:main"
+oakd-camera-tracking = "run_pipeline:main"
 
 # URLs for project information
 [project.urls]
@@ -58,24 +58,8 @@ Issues = "https://github.com/Yeah-Nah/where-the-hull-are-you/issues"
 
 # Setuptools configuration
 [tool.setuptools.packages.find]
-where = [
-    "oakd-camera-tracking/src",
-    "model-training/src",
-    "data-preparation/src",
-    "shared-tracking-metrics/src",
-    "."
-]
-include = [
-    "detection*",
-    "processors*",
-    "models*",
-    "evaluation*",
-    "training*",
-    "preprocessing*",
-    "tracking_metrics*",
-    "utils*",
-    "convert_model*"
-]
+where = ["oakd-camera-tracking"]
+include = ["src*"]
 exclude = ["tests*", "docs*", "*.egg-info"]
 
 # Ruff linter configuration

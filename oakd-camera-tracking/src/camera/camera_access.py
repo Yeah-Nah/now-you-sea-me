@@ -89,17 +89,32 @@ class CameraAccess:
         frame: NDArray[np.uint8] = packet.getCvFrame()
         return frame
 
-    def get_gyro_data(self) -> dai.IMUData | None:
-        """Return the latest IMU packet, or None if gyroscope is not enabled.
+    def get_gyro_data(self) -> list[dict[str, float]] | None:
+        """Return parsed gyroscope readings from the latest IMU packet.
 
         Returns
         -------
-        dai.IMUData | None
-            Latest IMU data packet, or None.
+        list[dict[str, float]] | None
+            List of readings with keys ``timestamp_s``, ``x``, ``y``, ``z``,
+            or None if no packet is available or gyroscope is not enabled.
         """
         if self._imu_queue is None:
             return None
-        return self._imu_queue.tryGet()
+        packet = self._imu_queue.tryGet()
+        if packet is None:
+            return None
+        readings = []
+        for imu_packet in packet.packets:
+            gyro = imu_packet.gyroscope
+            readings.append(
+                {
+                    "timestamp_s": gyro.timestamp.total_seconds(),
+                    "x": gyro.x,
+                    "y": gyro.y,
+                    "z": gyro.z,
+                }
+            )
+        return readings or None
 
     def stop(self) -> None:
         """Close the device connection and release resources."""

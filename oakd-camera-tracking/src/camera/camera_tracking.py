@@ -20,15 +20,16 @@ class CameraTracking:
 
     def draw_detections(
         self,
-        frame: NDArray[np.uint8],
+        _frame: NDArray[np.uint8],
         results: Results,
     ) -> NDArray[np.uint8]:
         """Draw bounding boxes and track IDs from YOLO results onto a frame.
 
         Parameters
         ----------
-        frame : NDArray[np.uint8]
-            Original BGR frame (unused directly; present for API clarity).
+        _frame : NDArray[np.uint8]
+            Original BGR frame, accepted for API compatibility but not used
+            to generate the annotated output (which comes from results.plot()).
         results : Results
             YOLO Results object returned by model.track() or model.predict().
 

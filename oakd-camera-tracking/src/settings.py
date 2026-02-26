@@ -3,7 +3,8 @@
 from pathlib import Path
 
 from loguru import logger
-from utils.config_utils import get_project_root, load_yaml
+
+from .utils.config_utils import get_project_root, load_yaml
 
 
 class Settings:
@@ -15,7 +16,7 @@ class Settings:
     Parameters
     ----------
     pipeline_config_path : str | Path
-        Path to pipline_config.yaml.
+        Path to pipeline_config.yaml.
     model_config_path : str | Path
         Path to model_config.yaml.
     """
@@ -36,11 +37,11 @@ class Settings:
         raw = str(
             self.pipeline_config.get("camera_feed_output_dir", "output/recordings/")
         )
-        return (self._root / raw).resolve()  # type: ignore[no-any-return]
+        return (self._root / raw).resolve()
 
     def _resolve_model_path(self) -> Path:
         model_filename = str(self.model_config.get("model", ""))
-        return (self._root / "models" / model_filename).resolve()  # type: ignore[no-any-return]
+        return (self._root / "models" / model_filename).resolve()
 
     def _validate(self) -> None:
         if self.inference_enabled and not self.model_path.exists():

@@ -23,4 +23,4 @@ From the `oakd-camera-tracking/` directory:
 python run_pipeline.py
 ```
 
-Configure behavior in `configs/pipline_config.yaml` (enable/disable inference, tracking, recording, live view, etc.)
+Configure behavior in `configs/pipeline_config.yaml` (enable/disable inference, tracking, recording, live view, etc.)
