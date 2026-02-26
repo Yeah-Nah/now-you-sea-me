@@ -55,8 +55,8 @@ class CameraAccess:
 
         cam = self._pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_A)
         self._video_queue = cam.requestOutput(
-            (1920, 1080), fps=self._fps
-        ).createOutputQueue(maxSize=4, blocking=False)
+            (1280, 720), fps=self._fps
+        ).createOutputQueue(maxSize=16, blocking=False)
 
         if self._record_gyroscope:
             imu = self._pipeline.create(dai.node.IMU)
