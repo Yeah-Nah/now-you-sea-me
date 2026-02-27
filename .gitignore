@@ -208,3 +208,10 @@ __marimo__/
 
 # Claude
 .claude/
+
+# Video files
+*.mp4
+
+# Json files
+*.json
+*.jsonl
