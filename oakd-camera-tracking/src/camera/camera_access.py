@@ -36,16 +36,21 @@ class CameraAccess:
         Raises
         ------
         RuntimeError
-            If no OAK-D device is found or the connection fails.
+            If pipeline creation fails or no OAK-D device is found.
         """
         try:
             self._pipeline = dai.Pipeline()
+            self._build_pipeline()
+            self._pipeline.start()
         except RuntimeError as exc:
             logger.error(f"Failed to connect to OAK-D camera: {exc}")
+            self._pipeline = None  # Ensure cleanup on failure
             raise RuntimeError(f"OAK-D camera not found or unavailable: {exc}") from exc
+        except Exception as exc:
+            logger.error(f"Unexpected error during pipeline initialization: {exc}")
+            self._pipeline = None
+            raise RuntimeError(f"Pipeline initialization failed: {exc}") from exc
 
-        self._build_pipeline()
-        self._pipeline.start()
         logger.info("OAK-D camera started successfully.")
 
     def _build_pipeline(self) -> None:

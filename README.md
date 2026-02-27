@@ -25,7 +25,7 @@ python run_pipeline.py
 
 Configure behavior in `configs/pipeline_config.yaml` (enable/disable inference, tracking, recording, live view, etc.)
 
-## Troubshooting
+## Troubleshooting
 
 #### The feed shuts down within a few seconds
 
