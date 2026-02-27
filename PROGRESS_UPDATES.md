@@ -2,11 +2,7 @@
 
 A development journey blog documenting the creation of a boat tracking system.
 
----
-
-# Phase 0: Creating Pipeline on Edge Device
-
---
+# Phase 0: Creating Pipeline on Local Device
 
 ## Entry 2: DepthAI V3 Migration & Gyroscope Integration
 *Date: February 27, 2026*
