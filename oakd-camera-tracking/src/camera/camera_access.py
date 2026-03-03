@@ -12,9 +12,9 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 _CAMERA_SOCKETS: dict[str, dai.CameraBoardSocket] = {
-    "cam_a": dai.CameraBoardSocket.CAM_A,
-    "cam_b": dai.CameraBoardSocket.CAM_B,
-    "cam_c": dai.CameraBoardSocket.CAM_C,
+    "CAM_A": dai.CameraBoardSocket.CAM_A,
+    # "CAM_B": dai.CameraBoardSocket.CAM_B,
+    # "CAM_C": dai.CameraBoardSocket.CAM_C,
 }
 
 
