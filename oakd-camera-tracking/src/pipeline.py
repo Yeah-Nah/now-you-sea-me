@@ -138,7 +138,7 @@ class Pipeline:
         for cam_name in self._camera.get_camera_names():
             self._recorders[cam_name] = CameraRecording(
                 output_dir=self._settings.output_dir,
-                file_prefix=f"{cam_name}_recording",
+                file_prefix=f"{cam_name.lower()}_recording",
             )
             self._recording_started[cam_name] = False
 
@@ -189,7 +189,7 @@ class Pipeline:
             self._recorders[cam_name].write(display_frame)
 
         if self.live_view_enabled:
-            cv2.imshow(f"OAK-D Feed - {cam_name.upper()}", display_frame)
+            cv2.imshow(f"OAK-D Feed - {cam_name}", display_frame)
 
     def _apply_inference(self, frame: NDArray[np.uint8]) -> NDArray[np.uint8]:
         """Run object detection and draw annotations if inference is enabled.

@@ -11,22 +11,19 @@ from loguru import logger
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
-_CAMERA_SOCKETS: dict[str, dai.CameraBoardSocket] = {
-    "CAM_A": dai.CameraBoardSocket.CAM_A,
-    # "CAM_B": dai.CameraBoardSocket.CAM_B,
-    # "CAM_C": dai.CameraBoardSocket.CAM_C,
-}
-
 
 class CameraAccess:
     """Handles OAK-D camera connection and frame access using DepthAI.
+
+    Camera sockets and their native resolutions are discovered at runtime
+    from the connected device, so no static socket configuration is needed.
 
     Parameters
     ----------
     record_gyroscope : bool
         If True, enables the IMU node and exposes gyroscope readings.
     fps : int
-        Target frames per second for the ColorCamera node.
+        Target frames per second for each ColorCamera node.
     """
 
     def __init__(self, record_gyroscope: bool, fps: int = 30) -> None:
@@ -35,40 +32,88 @@ class CameraAccess:
         self._pipeline: dai.Pipeline | None = None
         self._video_queues: dict[str, dai.DataOutputQueue] = {}
         self._imu_queue: dai.DataOutputQueue | None = None
+        self._camera_features: list[dai.CameraFeatures] = []
 
     def start(self) -> None:
-        """Build the DepthAI pipeline and open the device connection.
+        """Discover cameras, build the DepthAI pipeline, and open the device connection.
+
+        Camera sockets and native resolutions are queried from the device
+        before the pipeline is constructed, so the pipeline is fully driven
+        by what the hardware reports.
 
         Raises
         ------
         RuntimeError
-            If pipeline creation fails or no OAK-D device is found.
+            If no OAK-D device is found, or if pipeline creation fails.
         """
         try:
+            self._camera_features = self._discover_cameras()
             self._pipeline = dai.Pipeline()
             self._build_pipeline()
             self._pipeline.start()
         except RuntimeError as exc:
             logger.error(f"Failed to connect to OAK-D camera: {exc}")
-            self._pipeline = None  # Ensure cleanup on failure
+            self._pipeline = None
             raise RuntimeError(f"OAK-D camera not found or unavailable: {exc}") from exc
         except Exception as exc:
             logger.error(f"Unexpected error during pipeline initialization: {exc}")
             self._pipeline = None
             raise RuntimeError(f"Pipeline initialization failed: {exc}") from exc
 
-        logger.info("OAK-D camera started successfully.")
+        logger.info(
+            f"OAK-D camera started with {len(self._camera_features)} sensor(s): "
+            f"{self.get_camera_names()}"
+        )
+
+    def _discover_cameras(self) -> list[dai.CameraFeatures]:
+        """Open a temporary device connection to query available camera sensors.
+
+        The device is closed immediately after the query so that the pipeline
+        can connect to it during ``start()``.
+
+        Returns
+        -------
+        list[dai.CameraFeatures]
+            Camera features for each connected sensor, including socket,
+            native resolution, and sensor type, in device-reported order.
+
+        Raises
+        ------
+        RuntimeError
+            If no OAK-D device is detected, or if no cameras are reported.
+        """
+        available = dai.Device.getAllAvailableDevices()
+        if not available:
+            raise RuntimeError("No OAK-D device found")
+
+        with dai.Device(available[0]) as device:
+            features = list(device.getConnectedCameraFeatures())
+
+        if not features:
+            raise RuntimeError("Connected device reported no camera sensors")
+
+        logger.debug(
+            f"Discovered {len(features)} camera sensor(s) on device "
+            f"'{available[0].name}'."
+        )
+        return features
 
     def _build_pipeline(self) -> None:
-        """Build the DepthAI pipeline nodes and output queues using V3 API."""
+        """Build pipeline nodes for each discovered camera and the optional IMU."""
         if self._pipeline is None:
             raise RuntimeError("Pipeline not initialized")
 
-        for name, socket in _CAMERA_SOCKETS.items():
-            cam = self._pipeline.create(dai.node.Camera).build(socket)
-            self._video_queues[name] = cam.requestOutput(
-                (1280, 720), fps=self._fps
+        for cam_features in self._camera_features:
+            cam_name = cam_features.socket.name
+            resolution = (cam_features.width, cam_features.height)
+            cam = self._pipeline.create(dai.node.Camera).build(cam_features.socket)
+            self._video_queues[cam_name] = cam.requestOutput(
+                resolution, fps=self._fps
             ).createOutputQueue(maxSize=16, blocking=False)
+            logger.debug(
+                f"Pipeline: added '{cam_name}' ({cam_features.sensorName}) "
+                f"at {resolution[0]}x{resolution[1]}."
+            )
 
         if self._record_gyroscope:
             imu = self._pipeline.create(dai.node.IMU)
@@ -78,22 +123,26 @@ class CameraAccess:
             self._imu_queue = imu.out.createOutputQueue(maxSize=50, blocking=False)
 
     def get_camera_names(self) -> list[str]:
-        """Return the names of all configured cameras.
+        """Return the socket names of all discovered cameras.
+
+        Names match the ``dai.CameraBoardSocket`` enum (e.g. ``"CAM_A"``)
+        and are only populated after ``start()`` is called.
 
         Returns
         -------
         list[str]
-            Camera names in pipeline order (e.g. ``["cam_a", "cam_b", "cam_c"]``).
+            Camera names in device-reported order.
         """
-        return list(_CAMERA_SOCKETS.keys())
+        return [f.socket.name for f in self._camera_features]
 
-    def get_frame(self, camera: str = "cam_a") -> NDArray[np.uint8] | None:
+    def get_frame(self, camera: str) -> NDArray[np.uint8] | None:
         """Pop the latest frame from the specified camera's video queue.
 
         Parameters
         ----------
         camera : str
-            Camera name, one of ``"cam_a"``, ``"cam_b"``, ``"cam_c"``.
+            Camera socket name as returned by ``get_camera_names()``
+            (e.g. ``"CAM_A"``).
 
         Returns
         -------
