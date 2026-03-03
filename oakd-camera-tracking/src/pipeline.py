@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
     from settings import Settings
 
-_FPS: int = 30
+_FPS: int = 28.5
 _IDLE_SLEEP_S: float = 0.001
 _QUIT_KEY: int = ord("q")
 
@@ -79,7 +79,7 @@ class Pipeline:
 
     def _create_camera(self) -> CameraAccess:
         """Instantiate the camera access object."""
-        return CameraAccess(record_gyroscope=self._settings.record_gyroscope)
+        return CameraAccess(record_gyroscope=self._settings.record_gyroscope, fps=_FPS)
 
     def _create_tracker(self) -> CameraTracking | None:
         """Create a tracker instance if inference is enabled."""
