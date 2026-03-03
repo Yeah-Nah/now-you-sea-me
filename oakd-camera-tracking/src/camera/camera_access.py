@@ -11,6 +11,12 @@ from loguru import logger
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
+_CAMERA_SOCKETS: dict[str, dai.CameraBoardSocket] = {
+    "cam_a": dai.CameraBoardSocket.CAM_A,
+    "cam_b": dai.CameraBoardSocket.CAM_B,
+    "cam_c": dai.CameraBoardSocket.CAM_C,
+}
+
 
 class CameraAccess:
     """Handles OAK-D camera connection and frame access using DepthAI.
@@ -27,7 +33,7 @@ class CameraAccess:
         self._record_gyroscope = record_gyroscope
         self._fps = fps
         self._pipeline: dai.Pipeline | None = None
-        self._video_queue: dai.DataOutputQueue | None = None
+        self._video_queues: dict[str, dai.DataOutputQueue] = {}
         self._imu_queue: dai.DataOutputQueue | None = None
 
     def start(self) -> None:
@@ -58,10 +64,11 @@ class CameraAccess:
         if self._pipeline is None:
             raise RuntimeError("Pipeline not initialized")
 
-        cam = self._pipeline.create(dai.node.Camera).build(dai.CameraBoardSocket.CAM_A)
-        self._video_queue = cam.requestOutput(
-            (1280, 720), fps=self._fps
-        ).createOutputQueue(maxSize=16, blocking=False)
+        for name, socket in _CAMERA_SOCKETS.items():
+            cam = self._pipeline.create(dai.node.Camera).build(socket)
+            self._video_queues[name] = cam.requestOutput(
+                (1280, 720), fps=self._fps
+            ).createOutputQueue(maxSize=16, blocking=False)
 
         if self._record_gyroscope:
             imu = self._pipeline.create(dai.node.IMU)
@@ -70,17 +77,33 @@ class CameraAccess:
             imu.setMaxBatchReports(10)
             self._imu_queue = imu.out.createOutputQueue(maxSize=50, blocking=False)
 
-    def get_frame(self) -> NDArray[np.uint8] | None:
-        """Pop the latest frame from the video queue.
+    def get_camera_names(self) -> list[str]:
+        """Return the names of all configured cameras.
+
+        Returns
+        -------
+        list[str]
+            Camera names in pipeline order (e.g. ``["cam_a", "cam_b", "cam_c"]``).
+        """
+        return list(_CAMERA_SOCKETS.keys())
+
+    def get_frame(self, camera: str = "cam_a") -> NDArray[np.uint8] | None:
+        """Pop the latest frame from the specified camera's video queue.
+
+        Parameters
+        ----------
+        camera : str
+            Camera name, one of ``"cam_a"``, ``"cam_b"``, ``"cam_c"``.
 
         Returns
         -------
         NDArray[np.uint8] | None
             BGR numpy array of shape (H, W, 3), or None if no frame is available.
         """
-        if self._video_queue is None:
+        queue = self._video_queues.get(camera)
+        if queue is None:
             return None
-        packet = self._video_queue.tryGet()
+        packet = queue.tryGet()
         if packet is None:
             return None
         frame: NDArray[np.uint8] = packet.getCvFrame()
