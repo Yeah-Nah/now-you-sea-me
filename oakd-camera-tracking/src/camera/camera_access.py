@@ -165,7 +165,9 @@ class CameraAccess:
         Returns
         -------
         NDArray[np.uint8] | None
-            BGR numpy array of shape (H, W, 3), or None if no frame is available.
+            Frame as a numpy array: colour cameras return BGR frames of shape
+            (H, W, 3), while mono cameras return single-channel frames of shape
+            (H, W). Returns None if no frame is available.
         """
         queue = self._video_queues.get(camera)
         if queue is None:
@@ -209,6 +211,11 @@ class CameraAccess:
             self._pipeline.stop()
             self._pipeline = None
             logger.info("OAK-D camera stopped.")
+
+        # Clear all instance state to prevent use-after-stop
+        self._video_queues.clear()
+        self._imu_queue = None
+        self._camera_features.clear()
 
     def __enter__(self) -> CameraAccess:
         """Start the camera on context entry."""

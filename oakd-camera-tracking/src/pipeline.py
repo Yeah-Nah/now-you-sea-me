@@ -21,7 +21,8 @@ from .inference.object_detection import ObjectDetection
 if TYPE_CHECKING:
     import numpy as np
     from numpy.typing import NDArray
-    from settings import Settings
+
+    from .settings import Settings
 
 _FPS: int = 28
 _IDLE_SLEEP_S: float = 0.001
@@ -176,7 +177,7 @@ class Pipeline:
         Parameters
         ----------
         cam_name : str
-            Camera identifier (e.g. ``"cam_a"``).
+            Camera identifier (e.g. ``"CAM_A"``).
         frame : NDArray[np.uint8]
             Raw BGR frame from the camera.
         """
