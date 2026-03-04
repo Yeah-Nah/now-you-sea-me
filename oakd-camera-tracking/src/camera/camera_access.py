@@ -23,7 +23,7 @@ class CameraAccess:
     record_gyroscope : bool
         If True, enables the IMU node and exposes gyroscope readings.
     fps : int
-        Target frames per second for each ColorCamera node.
+        Target frames per second for each colourCamera node.
     """
 
     def __init__(self, record_gyroscope: bool, fps: int = 30) -> None:
@@ -134,6 +134,24 @@ class CameraAccess:
             Camera names in device-reported order.
         """
         return [f.socket.name for f in self._camera_features]
+
+    def is_colour_camera(self, frame: NDArray[np.uint8]) -> bool:
+        """Determine if a given frame is from a colour camera based on its shape.
+
+        Colour camera frames have 3 channels (H, W, 3), while mono cameras
+        have a single channel (H, W).
+
+        Parameters
+        ----------
+        frame : NDArray[np.uint8]
+            Frame array to check.
+
+        Returns
+        -------
+        bool
+            True if the frame has 3 channels and is likely from a colour camera.
+        """
+        return frame.ndim == 3 and frame.shape[2] == 3
 
     def get_frame(self, camera: str) -> NDArray[np.uint8] | None:
         """Pop the latest frame from the specified camera's video queue.

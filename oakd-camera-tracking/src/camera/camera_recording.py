@@ -38,7 +38,9 @@ class CameraRecording:
         """Datetime string generated when recording started (``YYYYMMDD_HHMMSS``)."""
         return self._timestamp
 
-    def start(self, frame_width: int, frame_height: int, fps: int) -> None:
+    def start(
+        self, frame_width: int, frame_height: int, fps: int, is_colour: bool
+    ) -> None:
         """Open the VideoWriter with a timestamped output filename.
 
         Creates the output directory if it does not already exist.
@@ -63,7 +65,7 @@ class CameraRecording:
         output_path = self._output_dir / filename
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         self._writer = cv2.VideoWriter(
-            str(output_path), fourcc, fps, (frame_width, frame_height)
+            str(output_path), fourcc, fps, (frame_width, frame_height), is_colour
         )
         if not self._writer.isOpened():
             logger.error(f"Failed to open VideoWriter at {output_path}")

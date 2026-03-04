@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
     from settings import Settings
 
-_FPS: int = 28.5
+_FPS: int = 28
 _IDLE_SLEEP_S: float = 0.001
 _QUIT_KEY: int = ord("q")
 
@@ -56,12 +56,12 @@ class Pipeline:
     @property
     def live_view_enabled(self) -> bool:
         """Whether to display each camera feed in a live window."""
-        return self._settings.live_view_enabled
+        return bool(self._settings.live_view_enabled)
 
     @property
     def recording_enabled(self) -> bool:
         """Whether to record each camera feed to disk."""
-        return self._settings.recording_enabled
+        return bool(self._settings.recording_enabled)
 
     @property
     def _primary_camera(self) -> str:
@@ -242,7 +242,10 @@ class Pipeline:
         if recorder is None:
             return
         height, width = frame.shape[:2]
-        recorder.start(frame_width=width, frame_height=height, fps=_FPS)
+        is_colour = self._camera.is_colour_camera(frame)
+        recorder.start(
+            frame_width=width, frame_height=height, fps=_FPS, is_colour=is_colour
+        )
         self._recording_started[cam_name] = True
 
     def _lazy_start_gyro(self, cam_name: str) -> None:
