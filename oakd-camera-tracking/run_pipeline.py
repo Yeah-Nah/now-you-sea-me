@@ -33,6 +33,11 @@ def main() -> None:
         default="configs/model_config.yaml",
         help="Path to the model config YAML",
     )
+    parser.add_argument(
+        "--camera-config",
+        default="configs/camera_config.yaml",
+        help="Path to the camera config YAML",
+    )
     args = parser.parse_args()
 
     logger.info("Loading configuration...")
@@ -40,6 +45,7 @@ def main() -> None:
         settings = Settings(
             pipeline_config_path=args.pipeline_config,
             model_config_path=args.model_config,
+            camera_config_path=args.camera_config,
         )
     except FileNotFoundError as exc:
         logger.error(f"Configuration error: {exc}")

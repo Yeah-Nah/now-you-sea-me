@@ -27,10 +27,12 @@ class Settings:
         self,
         pipeline_config_path: str | Path,
         model_config_path: str | Path,
+        camera_config_path: str | Path,
     ) -> None:
         self._root = get_project_root()
         self.pipeline_config: dict[str, object] = load_yaml(pipeline_config_path)
         self.model_config: dict[str, object] = load_yaml(model_config_path)
+        self.camera_config: dict[str, object] = load_yaml(camera_config_path)
         self.output_dir: Path = self._resolve_output_dir()
         self.model_path: Path = self._resolve_model_path()
         self._validate()
@@ -89,3 +91,15 @@ class Settings:
     def dev_or_pi(self) -> str:
         """Target runtime environment: 'dev' or 'pi'."""
         return str(self.pipeline_config.get("dev_or_pi", "dev"))
+
+    @property
+    def colour_camera_resolution(self) -> tuple[int, int]:
+        """Output resolution for colour cameras (e.g. CAM_A)."""
+        w, h = self.camera_config.get("colour_camera_resolution", [1920, 1080])
+        return int(w), int(h)
+
+    @property
+    def mono_camera_resolution(self) -> tuple[int, int]:
+        """Output resolution for mono cameras (e.g. CAM_B, CAM_C)."""
+        w, h = self.camera_config.get("mono_camera_resolution", [640, 400])
+        return int(w), int(h)
