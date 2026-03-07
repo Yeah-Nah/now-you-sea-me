@@ -1,5 +1,7 @@
 """Camera and model settings configuration."""
 
+import os
+import sys
 from pathlib import Path
 
 from loguru import logger
@@ -43,10 +45,21 @@ class Settings:
         model_filename = str(self.model_config.get("model", ""))
         return (self._root / "models" / model_filename).resolve()
 
+    def _has_display(self) -> bool:
+        """Return True if a display server is available for GUI output."""
+        if sys.platform == "linux":
+            return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+        return True  # Windows and macOS are assumed to have a display
+
     def _validate(self) -> None:
         if self.inference_enabled and not self.model_path.exists():
             logger.error(f"Model file not found: {self.model_path}")
             raise FileNotFoundError(f"Model file not found: {self.model_path}")
+        if self.live_view_enabled and not self._has_display():
+            logger.error("live_view_enabled is True but no display detected.")
+            raise OSError(
+                "No display detected. Set 'live_view_enabled: False' in pipeline_config.yaml."
+            )
         logger.debug(f"Settings validated. Project root: {self._root}")
 
     @property
