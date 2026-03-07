@@ -18,8 +18,10 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Install pre-commit
-        run: pip install pre-commit
+      - name: Install dependencies
+        run: |
+          pip install pre-commit
+          pip install -e ./oakd-camera-tracking[dev]
 
       - name: Run linting checks
         run: |
@@ -39,8 +41,10 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Install pre-commit
-        run: pip install pre-commit
+      - name: Install dependencies
+        run: |
+          pip install pre-commit
+          pip install -e ./oakd-camera-tracking[dev]
 
       - name: Run validation checks
         run: |
