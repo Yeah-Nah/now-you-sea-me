@@ -54,10 +54,10 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 
 ### 2. Transfer Project Files
 
-From your development machine:
+From your **development** machine:
 
 ```powershell
-# Using rsync (recommended - automatically excludes files per .gitignore)
+# Using rsync if installed on Windows (recommended - automatically excludes files per .gitignore)
 rsync -avz --exclude-from='.gitignore' --exclude '.git' `
   C:/Users/alexa/git/now-you-sea-me/oakd-camera-tracking/ `
   yeah-nah@<PI_IP>:/home/yeah-nah/oakd-camera-tracking/
@@ -93,6 +93,16 @@ Update these settings:
 - `dev_or_pi: "pi"`
 - `live_view_enabled: False` (if running headless)
 - `camera_feed_output_dir: "/home/yeah-nah/recordings/"`
+
+To save the file:
+- Press `Ctrl + O` (Write Out)
+- Press `Enter` to confirm the filename
+- Press `Ctrl + X` to exit nano
+
+After exiting, to verify:
+```bash
+cat configs/pipeline_config.yaml
+```
 
 Create output directory:
 
