@@ -92,7 +92,6 @@ nano configs/pipeline_config.yaml
 Update these settings:
 - `dev_or_pi: "pi"`
 - `live_view_enabled: False` (if running headless)
-- `camera_feed_output_dir: "/home/yeah-nah/recordings/"`
 
 To save the file:
 - Press `Ctrl + O` (Write Out)
@@ -102,12 +101,6 @@ To save the file:
 After exiting, to verify:
 ```bash
 cat configs/pipeline_config.yaml
-```
-
-Create output directory:
-
-```bash
-mkdir -p /home/yeah-nah/recordings
 ```
 
 ### 5. Run on Pi
@@ -122,7 +115,11 @@ python3 run_pipeline.py
 From your development machine:
 
 ```powershell
-scp yeah-nah@<PI_IP>:/home/yeah-nah/recordings/* ./output/recordings/
+# Navigate to your project directory
+cd C:\Users\<your-username>\git\now-you-sea-me\oakd-camera-tracking
+
+# Copy recordings from Pi to your local machine
+scp yeah-nah@<PI_IP>:~/oakd-camera-tracking/output/recordings/* ./output/recordings/
 ```
 
 ## Troubleshooting

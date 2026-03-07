@@ -56,7 +56,10 @@ class Settings:
             logger.error(f"Model file not found: {self.model_path}")
             raise FileNotFoundError(f"Model file not found: {self.model_path}")
         if self.live_view_enabled and not self._has_display():
-            logger.error("live_view_enabled is True but no display detected.")
+            logger.error(
+                "live_view_enabled is True but no display detected."
+                "Set live_view_enabled: False in configs/pipeline_config.yaml for headless operation."
+            )
             raise OSError(
                 "No display detected. Set 'live_view_enabled: False' in pipeline_config.yaml."
             )
