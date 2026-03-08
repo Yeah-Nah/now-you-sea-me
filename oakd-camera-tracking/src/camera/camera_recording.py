@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
 from pathlib import Path
 from typing import IO, TYPE_CHECKING
 
@@ -39,7 +38,12 @@ class CameraRecording:
         return self._timestamp
 
     def start(
-        self, frame_width: int, frame_height: int, fps: int, is_colour: bool
+        self,
+        frame_width: int,
+        frame_height: int,
+        fps: int,
+        is_colour: bool,
+        timestamp: str,
     ) -> None:
         """Open the VideoWriter with a timestamped output filename.
 
@@ -60,7 +64,7 @@ class CameraRecording:
             If the VideoWriter cannot be opened (e.g. no write permissions).
         """
         self._output_dir.mkdir(parents=True, exist_ok=True)
-        self._timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self._timestamp = timestamp
         filename = f"{self._file_prefix}_{self._timestamp}.mp4"
         output_path = self._output_dir / filename
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -111,19 +115,17 @@ class GyroRecorder:
         self._file_prefix = file_prefix
         self._file: IO[str] | None = None
 
-    def start(self, timestamp: str | None = None) -> None:
+    def start(self, timestamp: str) -> None:
         """Open the JSONL file for writing.
 
         Parameters
         ----------
-        timestamp : str | None
+        timestamp : str
             Datetime string in ``YYYYMMDD_HHMMSS`` format. Pass the value from
-            ``CameraRecording.timestamp`` to produce a matching filename. If
-            None, a new timestamp is generated.
+            ``CameraRecording.timestamp`` to produce a matching filename.
         """
-        ts = timestamp or datetime.now().strftime("%Y%m%d_%H%M%S")
         self._output_dir.mkdir(parents=True, exist_ok=True)
-        path = self._output_dir / f"{self._file_prefix}_{ts}.jsonl"
+        path = self._output_dir / f"{self._file_prefix}_{timestamp}.jsonl"
         self._file = path.open("w", encoding="utf-8")
         logger.info(f"Gyroscope recording started: {path}")
 
