@@ -95,11 +95,17 @@ class Settings:
     @property
     def colour_camera_resolution(self) -> tuple[int, int]:
         """Output resolution for colour cameras (e.g. CAM_A)."""
-        w, h = self.camera_config.get("colour_camera_resolution", [1920, 1080])
+        resolution: list[int] = self.camera_config.get(
+            "colour_camera_resolution", [1920, 1080]
+        )  # type: ignore[assignment]
+        w, h = resolution[0], resolution[1]
         return int(w), int(h)
 
     @property
     def mono_camera_resolution(self) -> tuple[int, int]:
         """Output resolution for mono cameras (e.g. CAM_B, CAM_C)."""
-        w, h = self.camera_config.get("mono_camera_resolution", [640, 400])
+        resolution: list[int] = self.camera_config.get(
+            "mono_camera_resolution", [640, 400]
+        )  # type: ignore[assignment]
+        w, h = resolution[0], resolution[1]
         return int(w), int(h)

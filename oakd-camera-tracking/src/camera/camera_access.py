@@ -164,7 +164,7 @@ class CameraAccess:
         """
         return frame.ndim == 3 and frame.shape[2] == 3
 
-    def get_frame(self, cam_name: str) -> NDArray | None:
+    def get_frame(self, cam_name: str) -> NDArray[np.uint8] | None:
         """Retrieve the most recent frame from a camera's queue.
 
         Parameters
@@ -174,7 +174,7 @@ class CameraAccess:
 
         Returns
         -------
-        NDArray | None
+        NDArray[np.uint8] | None
             BGR or grayscale frame, or None if no frame is ready.
         """
         queue = self._video_queues.get(cam_name)
@@ -189,7 +189,7 @@ class CameraAccess:
         msg = queue.get()
         frame = msg.getCvFrame()
         logger.debug(f"Retrieved frame from '{cam_name}': shape={frame.shape}")
-        return frame
+        return frame  # type: ignore[no-any-return]
 
     def get_gyro_data(self) -> list[dict[str, float]] | None:
         """Return parsed gyroscope readings from the latest IMU packet.

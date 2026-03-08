@@ -50,7 +50,7 @@ class Pipeline:
         self._recorders: dict[str, CameraRecording] = {}
         self._recording_started: dict[str, bool] = {}
         self._gyro_started: bool = False
-        self._session_timestamp: str | None = None  # Shared timestamp for all recorders
+        self._session_timestamp: str = self._generate_session_timestamp()
 
     # ------------------------------------------------------------------ #
     # Properties                                                           #
@@ -79,6 +79,10 @@ class Pipeline:
     # ------------------------------------------------------------------ #
     # Factory methods                                                      #
     # ------------------------------------------------------------------ #
+
+    def _generate_session_timestamp(self) -> str:
+        """Generate a timestamp string for the current recording session."""
+        return datetime.now().strftime("%Y%m%d_%H%M%S")
 
     def _create_camera(self) -> CameraAccess:
         """Instantiate the camera access object."""
@@ -249,10 +253,6 @@ class Pipeline:
         recorder = self._recorders.get(cam_name)
         if recorder is None:
             return
-
-        # Generate timestamp once for the entire session
-        if self._session_timestamp is None:
-            self._session_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         height, width = frame.shape[:2]
         is_colour = self._camera.is_colour_camera(frame)
