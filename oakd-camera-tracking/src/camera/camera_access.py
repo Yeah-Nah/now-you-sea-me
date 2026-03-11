@@ -183,9 +183,8 @@ class CameraAccess:
         if not queue.has():
             return None
         msg = queue.get()
-        frame = msg.getCvFrame()
 
-        return frame  # type: ignore[no-any-return]
+        return msg.getCvFrame()  # type: ignore[no-any-return]
 
     def get_gyro_data(self) -> list[dict[str, float]] | None:
         """Return parsed gyroscope readings from the latest IMU packet.

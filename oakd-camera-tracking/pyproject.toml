@@ -6,7 +6,6 @@ build-backend = "setuptools.build_meta"
 name = "oakd-camera-tracking"
 version = "0.1.0"
 description = "Edge device pipeline for boat detection and tracking using OAK-D camera and YOLO"
-readme = "../README.md"
 requires-python = ">=3.13"
 license = {text = "Apache License 2.0"}
 authors = [
