@@ -22,7 +22,7 @@ Successfully deployed the **oakd-camera-tracking** package to Raspberry Pi and a
 
 **Pi-Specific Optimizations:**
 - Implemented display detection for headless vs. desktop operation
-  - Auto-disables live view when no display detected (saves bandwidth)
+  - Detects when no display is attached; if `live_view_enabled` is true, raises a configuration error and requires disabling live view or attaching a display
   - Enables live preview when display available for debugging
 - Reduced color camera resolution to optimize bandwidth on Pi hardware
 - Enhanced logging output for remote debugging and monitoring
@@ -38,15 +38,15 @@ Successfully deployed the **oakd-camera-tracking** package to Raspberry Pi and a
 
 Parts arrival:
 
-<img src="other\images\20260306_132925_crop.JPG" alt="Testing Camera Connection" width="400">
+<img src="other/images/20260306_132925_crop.JPG" alt="Testing Camera Connection" width="400">
 
 Testing the pipeline and camera recording from the Pi device:
 
-<img src="other\images\Screenshot 2026-03-07 153303.png" alt="Testing Camera Connection" width="400">
+<img src="other/images/Screenshot 2026-03-07 153303.png" alt="Testing Camera Connection" width="400">
 
 Saved CAM_A, CAM_B, CAM_C and gyro data files:
 
-<img src="other\images\Screenshot 2026-03-08 110914.png" alt="Testing Camera Connection" width="400">
+<img src="other/images/Screenshot 2026-03-08 110914.png" alt="Testing Camera Connection" width="400">
 
 ---
 

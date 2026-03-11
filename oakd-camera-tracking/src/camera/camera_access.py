@@ -179,16 +179,12 @@ class CameraAccess:
         """
         queue = self._video_queues.get(cam_name)
         if queue is None:
-            logger.warning(f"No queue found for camera '{cam_name}'")
             return None
-
         if not queue.has():
-            logger.debug(f"No frame available for '{cam_name}' (queue empty)")
             return None
-
         msg = queue.get()
         frame = msg.getCvFrame()
-        logger.debug(f"Retrieved frame from '{cam_name}': shape={frame.shape}")
+
         return frame  # type: ignore[no-any-return]
 
     def get_gyro_data(self) -> list[dict[str, float]] | None:

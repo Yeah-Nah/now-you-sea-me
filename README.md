@@ -58,8 +58,8 @@ From your **development** machine:
 
 ```bash
 # In bash using rsync if installed on Windows (recommended - automatically excludes files per .gitignore)
-rsync -avz --exclude-from='.gitignore' --exclude '.git' `
-  C:/Users/alexa/git/now-you-sea-me/oakd-camera-tracking/ `
+rsync -avz --exclude-from='.gitignore' --exclude '.git' \
+  C:/Users/alexa/git/now-you-sea-me/oakd-camera-tracking/ \
   yeah-nah@<PI_IP>:/home/yeah-nah/oakd-camera-tracking/
 ```
 
