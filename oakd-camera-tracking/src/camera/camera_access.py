@@ -26,9 +26,17 @@ class CameraAccess:
         Target frames per second for each colourCamera node.
     """
 
-    def __init__(self, record_gyroscope: bool, fps: int = 30) -> None:
+    def __init__(
+        self,
+        record_gyroscope: bool,
+        fps: int = 30,
+        colour_resolution: tuple[int, int] = (1920, 1080),
+        mono_resolution: tuple[int, int] = (640, 400),
+    ) -> None:
         self._record_gyroscope = record_gyroscope
         self._fps = fps
+        self._colour_resolution = colour_resolution
+        self._mono_resolution = mono_resolution
         self._pipeline: dai.Pipeline | None = None
         self._video_queues: dict[str, dai.DataOutputQueue] = {}
         self._imu_queue: dai.DataOutputQueue | None = None
@@ -105,7 +113,10 @@ class CameraAccess:
 
         for cam_features in self._camera_features:
             cam_name = cam_features.socket.name
-            resolution = (cam_features.width, cam_features.height)
+            is_colour = any(
+                t == dai.CameraSensorType.COLOR for t in cam_features.supportedTypes
+            )
+            resolution = self._colour_resolution if is_colour else self._mono_resolution
             cam = self._pipeline.create(dai.node.Camera).build(cam_features.socket)
             self._video_queues[cam_name] = cam.requestOutput(
                 resolution, fps=self._fps
@@ -153,30 +164,27 @@ class CameraAccess:
         """
         return frame.ndim == 3 and frame.shape[2] == 3
 
-    def get_frame(self, camera: str) -> NDArray[np.uint8] | None:
-        """Pop the latest frame from the specified camera's video queue.
+    def get_frame(self, cam_name: str) -> NDArray[np.uint8] | None:
+        """Retrieve the most recent frame from a camera's queue.
 
         Parameters
         ----------
-        camera : str
-            Camera socket name as returned by ``get_camera_names()``
-            (e.g. ``"CAM_A"``).
+        cam_name : str
+            Name of the camera (e.g. ``"CAM_A"``).
 
         Returns
         -------
         NDArray[np.uint8] | None
-            Frame as a numpy array: colour cameras return BGR frames of shape
-            (H, W, 3), while mono cameras return single-channel frames of shape
-            (H, W). Returns None if no frame is available.
+            BGR or grayscale frame, or None if no frame is ready.
         """
-        queue = self._video_queues.get(camera)
+        queue = self._video_queues.get(cam_name)
         if queue is None:
             return None
-        packet = queue.tryGet()
-        if packet is None:
+        if not queue.has():
             return None
-        frame: NDArray[np.uint8] = packet.getCvFrame()
-        return frame
+        msg = queue.get()
+
+        return msg.getCvFrame()  # type: ignore[no-any-return]
 
     def get_gyro_data(self) -> list[dict[str, float]] | None:
         """Return parsed gyroscope readings from the latest IMU packet.

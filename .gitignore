@@ -212,6 +212,9 @@ __marimo__/
 # Video files
 *.mp4
 
+# Recordings directory
+oakd-camera-tracking/output/recordings/
+
 # Json files
 *.json
 *.jsonl

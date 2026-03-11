@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import sys
 import time
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 import cv2
@@ -49,6 +50,7 @@ class Pipeline:
         self._recorders: dict[str, CameraRecording] = {}
         self._recording_started: dict[str, bool] = {}
         self._gyro_started: bool = False
+        self._session_timestamp: str = self._generate_session_timestamp()
 
     # ------------------------------------------------------------------ #
     # Properties                                                           #
@@ -78,9 +80,18 @@ class Pipeline:
     # Factory methods                                                      #
     # ------------------------------------------------------------------ #
 
+    def _generate_session_timestamp(self) -> str:
+        """Generate a timestamp string for the current recording session."""
+        return datetime.now().strftime("%Y%m%d_%H%M%S")
+
     def _create_camera(self) -> CameraAccess:
         """Instantiate the camera access object."""
-        return CameraAccess(record_gyroscope=self._settings.record_gyroscope, fps=_FPS)
+        return CameraAccess(
+            record_gyroscope=self._settings.record_gyroscope,
+            fps=_FPS,
+            colour_resolution=self._settings.colour_camera_resolution,
+            mono_resolution=self._settings.mono_camera_resolution,
+        )
 
     def _create_tracker(self) -> CameraTracking | None:
         """Create a tracker instance if inference is enabled."""
@@ -242,10 +253,15 @@ class Pipeline:
         recorder = self._recorders.get(cam_name)
         if recorder is None:
             return
+
         height, width = frame.shape[:2]
         is_colour = self._camera.is_colour_camera(frame)
         recorder.start(
-            frame_width=width, frame_height=height, fps=_FPS, is_colour=is_colour
+            frame_width=width,
+            frame_height=height,
+            fps=_FPS,
+            is_colour=is_colour,
+            timestamp=self._session_timestamp,
         )
         self._recording_started[cam_name] = True
 
@@ -266,9 +282,7 @@ class Pipeline:
             or cam_name != self._primary_camera
         ):
             return
-        primary_recorder = self._recorders.get(self._primary_camera)
-        ts = primary_recorder.timestamp if primary_recorder is not None else None
-        self._gyro_recorder.start(timestamp=ts)
+        self._gyro_recorder.start(timestamp=self._session_timestamp)
         self._gyro_started = True
 
     # ------------------------------------------------------------------ #
@@ -277,10 +291,21 @@ class Pipeline:
 
     def _shutdown(self) -> None:
         """Stop recording, release the camera, and destroy display windows."""
+        logger.info("Shutting down pipeline (please wait for camera cleanup)...")
+
         for recorder in self._recorders.values():
             recorder.stop()
         if self._gyro_recorder is not None:
             self._gyro_recorder.stop()
-        self._camera.stop()
+
+        # Camera stop can be slow on hardware; protect from repeated Ctrl+C
+        try:
+            self._camera.stop()
+        except KeyboardInterrupt:
+            logger.warning("Camera stop interrupted. Forcing cleanup...")
+            # Camera will be released when Python exits anyway
+        except Exception as e:
+            logger.error(f"Error during camera cleanup: {e}")
+
         cv2.destroyAllWindows()
-        logger.info("Pipeline shut down cleanly.")
+        logger.success("Pipeline shut down cleanly.")

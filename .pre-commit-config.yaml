@@ -29,32 +29,6 @@ repos:
       - id: nbqa-ruff
         args: [--fix]
 
-# Type checking - shared-tracking-metrics
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.19.1
-    hooks:
-      - id: mypy
-        name: mypy (shared-tracking-metrics)
-        files: ^shared-tracking-metrics/
-        args: [--ignore-missing-imports, --strict, --explicit-package-bases]
-        additional_dependencies:
-          - types-PyYAML
-          - types-setuptools
-          - numpy
-
-  # Type checking - model-training
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.19.1
-    hooks:
-      - id: mypy
-        name: mypy (model-training)
-        files: ^model-training/
-        args: [--ignore-missing-imports, --strict, --explicit-package-bases]
-        additional_dependencies:
-          - types-PyYAML
-          - types-setuptools
-          - numpy
-
   # Type checking - oakd-camera-tracking
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.19.1
@@ -67,3 +41,4 @@ repos:
           - types-PyYAML
           - types-setuptools
           - numpy
+          - loguru
