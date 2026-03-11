@@ -42,4 +42,3 @@ repos:
           - types-setuptools
           - numpy
           - loguru
-          - opencv-python-headless  # Lighter than opencv-python, no GUI deps
