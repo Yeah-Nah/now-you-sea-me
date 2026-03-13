@@ -206,9 +206,6 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# Claude
-.claude/
-
 # Video files
 *.mp4
 
