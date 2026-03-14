@@ -11,6 +11,8 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
     from ultralytics.engine.results import Results
 
+    from ..depth_perception.target_estimator import DetectionEstimate
+
 
 class CameraTracking:
     """Applies inference results and draws bounding boxes on camera frames.
@@ -22,7 +24,7 @@ class CameraTracking:
         self,
         _frame: NDArray[np.uint8],
         results: Results,
-        estimates: list[dict] | None = None,
+        estimates: list[DetectionEstimate] | None = None,
     ) -> NDArray[np.uint8]:
         """Draw bounding boxes and depth labels from YOLO results onto a frame.
 
@@ -33,7 +35,7 @@ class CameraTracking:
             to generate the annotated output (which comes from results.plot()).
         results : Results
             YOLO Results object returned by model.track() or model.predict().
-        estimates : list[dict] | None
+        estimates : list[DetectionEstimate] | None
             Per-detection depth estimates from ``TargetEstimator.estimate()``.
             Each dict must contain ``distance_m`` (float or None) and
             ``bbox_xyxy`` ([x1, y1, x2, y2]). If None or empty, only YOLO
@@ -55,12 +57,24 @@ class CameraTracking:
                 origin = (int(x2) - 150, int(y1) + 80)
                 # Black outline for contrast, white fill on top.
                 cv2.putText(
-                    annotated, label, origin,
-                    cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 0), 3, cv2.LINE_AA,
+                    annotated,
+                    label,
+                    origin,
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    2,
+                    (0, 0, 0),
+                    3,
+                    cv2.LINE_AA,
                 )
                 cv2.putText(
-                    annotated, label, origin,
-                    cv2.FONT_HERSHEY_SIMPLEX, 2, (255, 255, 255), 1, cv2.LINE_AA,
+                    annotated,
+                    label,
+                    origin,
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    2,
+                    (255, 255, 255),
+                    1,
+                    cv2.LINE_AA,
                 )
 
         return annotated

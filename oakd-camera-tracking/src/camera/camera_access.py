@@ -180,8 +180,8 @@ class CameraAccess:
         stereo.setDefaultProfilePreset(dai.node.StereoDepth.PresetMode.DEFAULT)
         stereo.setDepthAlign(colour_socket)
         stereo.setOutputSize(*self._colour_resolution)
-        left_output.link(stereo.left)  # type: ignore[union-attr]
-        right_output.link(stereo.right)  # type: ignore[union-attr]
+        left_output.link(stereo.left)  # type: ignore[attr-defined]
+        right_output.link(stereo.right)  # type: ignore[attr-defined]
         self._depth_queue = stereo.depth.createOutputQueue(maxSize=8, blocking=False)
         logger.debug(
             f"Pipeline: StereoDepth node wired ({left_name}→left, "
@@ -222,7 +222,9 @@ class CameraAccess:
         set[str]
             Socket names of colour cameras (e.g. ``{"CAM_A"}``).
         """
-        return {f.socket.name for f in self._camera_features if self._is_colour_sensor(f)}
+        return {
+            f.socket.name for f in self._camera_features if self._is_colour_sensor(f)
+        }
 
     def is_colour_camera(self, frame: NDArray[np.uint8]) -> bool:
         """Determine if a given frame is from a colour camera based on its shape.

@@ -69,7 +69,7 @@ class DepthZoneAnalyser:
             "right": depth_frame[:, 2 * third :],
         }
 
-        result: dict = {}
+        result: dict[str, dict[str, float | str | None]] = {}
         for zone in _ZONES:
             region = slices[zone]
             valid = region[(region >= _MIN_DEPTH_MM) & (region <= _MAX_DEPTH_MM)]

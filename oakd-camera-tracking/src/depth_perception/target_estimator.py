@@ -2,13 +2,24 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 
 import numpy as np
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
     from ultralytics.engine.results import Results
+
+
+class DetectionEstimate(TypedDict):
+    """Per-detection output from :meth:`TargetEstimator.estimate`."""
+
+    track_id: int | None
+    confidence: float
+    distance_m: float | None
+    bearing_normalised: float
+    bbox_xyxy: list[float]
+
 
 # Depth sanity limits (millimetres)
 _MIN_DEPTH_MM: int = 1
@@ -34,7 +45,7 @@ class TargetEstimator:
         depth_frame: NDArray[np.uint16],
         results: Results,
         image_width: int,
-    ) -> list[dict[str, float | int | None]]:
+    ) -> list[DetectionEstimate]:
         """Estimate distance and bearing for every detection in *results*.
 
         Parameters
@@ -50,12 +61,12 @@ class TargetEstimator:
 
         Returns
         -------
-        list[dict[str, float | int | None]]
-            One dict per detection with keys:
+        list[DetectionEstimate]
+            One :class:`DetectionEstimate` per detection with keys:
             ``track_id``, ``confidence``, ``distance_m``,
             ``bearing_normalised``, ``bbox_xyxy``.
         """
-        estimates: list[dict[str, float | int | None]] = []
+        estimates: list[DetectionEstimate] = []
 
         if results.boxes is None or len(results.boxes) == 0:
             return estimates
