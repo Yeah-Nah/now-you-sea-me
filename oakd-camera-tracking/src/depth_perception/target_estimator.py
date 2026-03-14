@@ -17,7 +17,7 @@ _MIN_VALID_PIXELS: int = 10
 
 # Fraction of the bounding box to crop from each edge before sampling depth.
 # 0.4 means the inner 20% of width and height is sampled.
-_EDGE_CROP: float = 0.4
+_EDGE_CROP: float = 0.3
 
 
 class TargetEstimator:

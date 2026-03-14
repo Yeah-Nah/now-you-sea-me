@@ -17,6 +17,7 @@ from loguru import logger
 from .camera.camera_access import CameraAccess
 from .camera.camera_recording import CameraRecording, GyroRecorder
 from .camera.camera_tracking import CameraTracking
+from .depth_perception.target_estimator import TargetEstimator
 from .inference.object_detection import ObjectDetection
 
 if TYPE_CHECKING:
@@ -45,6 +46,7 @@ class Pipeline:
         self._tracker = self._create_tracker()
         self._detector = self._create_detector()
         self._gyro_recorder = self._create_gyro_recorder()
+        self._estimator = self._create_estimator()
         # Populated in _setup_recorders() after camera connects so that
         # names are sourced from the device rather than hardcoded here.
         self._recorders: dict[str, CameraRecording] = {}
@@ -113,6 +115,10 @@ class Pipeline:
         if not self._settings.record_gyroscope:
             return None
         return GyroRecorder(output_dir=self._settings.output_dir)
+
+    def _create_estimator(self) -> TargetEstimator | None:
+        """Create a depth estimator if inference is enabled."""
+        return TargetEstimator() if self._settings.inference_enabled else None
 
     # ------------------------------------------------------------------ #
     # Public interface                                                     #
@@ -226,9 +232,15 @@ class Pipeline:
         if self._detector is None:
             return frame
         results = self._detector.run(frame)
-        if results is not None and self._tracker is not None:
-            return self._tracker.draw_detections(frame, results)
-        return frame
+        if results is None or self._tracker is None:
+            return frame
+        depth_frame = self._camera.get_depth_frame()
+        estimates = (
+            self._estimator.estimate(depth_frame, results, frame.shape[1])
+            if self._estimator is not None and depth_frame is not None
+            else []
+        )
+        return self._tracker.draw_detections(frame, results, estimates)
 
     def _poll_gyro(self) -> None:
         """Drain the IMU queue and flush any new readings to disk."""

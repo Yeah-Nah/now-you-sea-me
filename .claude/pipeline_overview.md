@@ -99,9 +99,9 @@ python run_pipeline.py --pipeline-config configs/pipeline_config.yaml
 ### `pipeline.py` — `Pipeline`
 The central orchestrator. Owns the main loop and wires all components together.
 
-**Init:** creates `CameraAccess`, `CameraTracking` (if inference on), `ObjectDetection` (if inference on), `GyroRecorder` (if gyro on).
+**Init:** creates `CameraAccess`, `CameraTracking` (if inference on), `ObjectDetection` (if inference on), `GyroRecorder` (if gyro on). Also initialises `_colour_camera_names: set[str] = set()` (populated after `start()`).
 
-**`run()`:** starts camera → sets up per-camera recorders → enters main loop → shuts down cleanly.
+**`run()`:** starts camera → populates `_colour_camera_names` from `get_colour_camera_names()` (hardware metadata, set once) → sets up per-camera recorders → enters main loop → shuts down cleanly.
 
 **Main loop `_main_loop()`:**
 ```
@@ -110,9 +110,9 @@ for each camera:
     _process_frame(cam_name, frame)
         → lazy-start video recorder on first frame
         → lazy-start gyro recorder (synced to primary camera timestamp)
-        → _apply_inference(frame) → annotated frame
+        → _apply_inference(frame) if cam_name in _colour_camera_names else pass through
         → write frame to recorder
-        → show in OpenCV window (if live_view_enabled)
+        → show in OpenCV window only if live_view_enabled AND cam_name in _colour_camera_names
 poll gyro queue → flush readings to JSONL
 check for 'q' keypress to quit
 ```
@@ -126,6 +126,7 @@ The DepthAI hardware layer. Key behaviours:
 - **Stereo depth node:** `dai.node.StereoDepth` is now wired up in `_build_pipeline()`. CAM_B feeds `stereo.left`, CAM_C feeds `stereo.right`. Configured with `HIGH_DENSITY` preset and `setDepthAlign(CAM_A)` so the depth map is reprojected to match the colour camera's field of view exactly — bounding box pixel coordinates from the colour frame can be used directly on the depth map without rescaling. Depth output queue is stored as `self._depth_queue` (maxSize=8, non-blocking). Only built when both CAM_B and CAM_C are present.
 - **IMU node:** created only if `record_gyroscope=True`. Enables `GYROSCOPE_RAW` at 100 Hz. Queue depth 50.
 - `get_frame(cam_name)` → returns an OpenCV BGR/grayscale frame via `getCvFrame()`.
+- `get_colour_camera_names()` → returns a `set[str]` of socket names for all colour (RGB) sensors, derived from `_camera_features` hardware metadata. Only valid after `start()`.
 - `get_depth_frame()` → returns the latest depth frame as `NDArray[np.uint16]` where pixel values are distances in millimetres. Returns `None` if the stereo node was not wired or no frame is ready yet.
 - `get_gyro_data()` → returns list of `{timestamp_s, x, y, z}` dicts from the latest IMU packet.
 
@@ -134,7 +135,7 @@ The DepthAI hardware layer. Key behaviours:
 - `GyroRecorder`: writes gyro readings to a `.jsonl` file. Filename timestamp is synced to the primary camera's recording timestamp so both files can be aligned in post-processing.
 
 ### `camera/camera_tracking.py` — `CameraTracking`
-Stateless. Single method `draw_detections(frame, results)` calls `results.plot()` to generate an annotated frame with bounding boxes and track IDs drawn. The `frame` argument is accepted for API compatibility but the annotated output comes from YOLO directly.
+Stateless. Single method `draw_detections(frame, results)` calls `results.plot()` to generate an annotated frame with bounding boxes and track IDs drawn. The `frame` argument is accepted for API compatibility but the annotated output comes from YOLO directly. The method computes detection count (`n`) but does not yet log or use it — this is an incomplete stub left over from a planned depth overlay. Depth estimates are not yet accepted or drawn.
 
 ### `inference/object_detection.py` — `ObjectDetection`
 Wraps the YOLO model.
@@ -156,7 +157,7 @@ Estimates distance and bearing for each YOLO detection using a stereo depth fram
 - Returns one dict per detection with keys: `track_id`, `confidence`, `distance_m`, `bearing_normalised`, `bbox_xyxy`.
 - Constants: `_MIN_DEPTH_MM = 1`, `_MAX_DEPTH_MM = 10_000`, `_MIN_VALID_PIXELS = 10`, `_EDGE_CROP = 0.4`.
 
-**Current integration status:** `TargetEstimator` is not yet called from `pipeline.py`. The module exists and is correct but `_apply_inference()` has not been updated to call `get_depth_frame()` or pass estimates to `CameraTracking`.
+**Current integration status:** `TargetEstimator` is not yet called from `pipeline.py`. The module exists and is correct but `_apply_inference()` has not been updated to call `get_depth_frame()` or pass estimates to `CameraTracking`. This is the primary remaining pending work.
 
 ### `depth_perception/depth_zones.py` — `DepthZoneAnalyser` (placeholder)
 Classifies obstacle danger across three horizontal zones of the depth frame. Intended for future connection to the ROS2 `control_node` / `obstacle_avoidance_node` — **not yet wired to anything in the pipeline**.
@@ -177,9 +178,9 @@ Classifies obstacle danger across three horizontal zones of the depth frame. Int
 
 ```
 OAK-D Device
-  ├── CAM_A (colour, 1920×1080) ──→ video queue ──→ get_frame("CAM_A") ──→ YOLO inference ──→ annotated frame ──→ record / display
-  ├── CAM_B (mono,  640×400)   ──→ video queue ──→ get_frame("CAM_B") ──→ (no inference)  ──→ record / display
-  ├── CAM_C (mono,  640×400)   ──→ video queue ──→ get_frame("CAM_C") ──→ (no inference)  ──→ record / display
+  ├── CAM_A (colour, 1920×1080) ──→ video queue ──→ get_frame("CAM_A") ──→ YOLO inference ──→ annotated frame ──→ record + display
+  ├── CAM_B (mono,  640×400)   ──→ video queue ──→ get_frame("CAM_B") ──→ (no inference)  ──→ record only (not displayed)
+  ├── CAM_C (mono,  640×400)   ──→ video queue ──→ get_frame("CAM_C") ──→ (no inference)  ──→ record only (not displayed)
   ├── CAM_B + CAM_C ──→ StereoDepth node ──→ depth queue ──→ get_depth_frame() ──→ (not yet consumed by pipeline)
   └── IMU (GYROSCOPE_RAW 100Hz)──→ imu queue   ──→ get_gyro_data()    ──→ JSONL recording
 ```
@@ -187,7 +188,6 @@ OAK-D Device
 **Wired but not yet integrated:** `get_depth_frame()` produces depth frames, and `TargetEstimator` + `DepthZoneAnalyser` are implemented and correct, but `pipeline.py` does not yet call them. The next pending changes are:
 1. Update `_apply_inference()` in `pipeline.py` to call `get_depth_frame()` and pass the result to `TargetEstimator.estimate()`.
 2. Update `CameraTracking.draw_detections()` to accept estimates and overlay distance labels via `cv2.putText()`.
-3. Update `_process_frame()` in `pipeline.py` so live view (`cv2.imshow`) only shows the colour camera (CAM_A), not all three cameras.
 
 ---
 
@@ -225,11 +225,13 @@ Saved to `output/recordings/`, timestamped per session (`YYYYMMDD_HHMMSS`):
 
 ## Planned Next Steps
 
-Three pending changes remain from the depth perception work:
+Two pending changes remain from the depth perception work:
 
 1. **Integrate `TargetEstimator` into `pipeline.py`:** update `_apply_inference()` to call `self._camera.get_depth_frame()` and pass the depth frame + results to `TargetEstimator.estimate()`. Pass the returned estimates list to `CameraTracking.draw_detections()`.
 2. **Overlay distance on live view:** update `CameraTracking.draw_detections()` to accept an optional `estimates: list[dict] | None` parameter and use `cv2.putText()` to draw `"{distance_m:.2f}m"` labels in cyan above each bounding box.
-3. **Restrict live view to colour camera only:** update `_process_frame()` in `pipeline.py` so `cv2.imshow()` is only called when `self._camera.is_colour_camera(frame)` is True. All cameras continue to be recorded to disk.
+
+### Completed
+- ~~**Restrict live view to colour camera only:**~~ Done. `_process_frame()` in `pipeline.py` now gates both `_apply_inference()` and `cv2.imshow()` on `cam_name in self._colour_camera_names`. The set is populated once from hardware metadata (`get_colour_camera_names()`) immediately after `camera.start()`. Mono cameras (CAM_B, CAM_C) continue to be recorded to disk but are never passed to inference or displayed.
 
 Future modules planned for `depth_perception/`:
 - `fusion.py` — IMU + depth fusion helpers (Phase 4)
