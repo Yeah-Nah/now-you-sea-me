@@ -14,6 +14,8 @@ Edge device pipeline for live boat detection and tracking using an OAK-D camera 
 
 ```
 now-you-sea-me/
+├── .claude/
+│   └── pipeline_overview.md    ← this file
 ├── oakd-camera-tracking/       ← main package
 │   ├── run_pipeline.py         ← entry point
 │   ├── configs/
@@ -27,13 +29,15 @@ now-you-sea-me/
 │       ├── pipeline.py         ← orchestrator
 │       ├── settings.py         ← config loading + validation
 │       ├── camera/
-│       │   ├── camera_access.py      ← DepthAI hardware layer
+│       │   ├── camera_access.py      ← DepthAI hardware layer (StereoDepth now wired)
 │       │   ├── camera_recording.py   ← video + gyro recording to disk
 │       │   └── camera_tracking.py    ← YOLO result annotation/drawing
 │       ├── inference/
 │       │   └── object_detection.py   ← YOLO model wrapper
 │       ├── depth_perception/
-│       │   └── __init__.py           ← placeholder, work in progress
+│       │   ├── __init__.py           ← package init
+│       │   ├── target_estimator.py   ← distance + bearing per detection ✅
+│       │   └── depth_zones.py        ← obstacle zone analysis (placeholder) ✅
 │       └── utils/
 │           └── config_utils.py       ← YAML loading, project root resolution
 ├── planning.md                 ← full phase plan (Phases 0–5)
@@ -119,9 +123,10 @@ check for 'q' keypress to quit
 The DepthAI hardware layer. Key behaviours:
 - On `start()`: opens a temporary device connection to **discover cameras dynamically** (socket name, sensor type, native resolution). Closes the temp connection, then builds the real DepthAI pipeline.
 - **Camera nodes:** one `dai.node.Camera` per discovered sensor. CAM_A is colour (1920×1080), CAM_B and CAM_C are mono (640×400, the stereo pair).
+- **Stereo depth node:** `dai.node.StereoDepth` is now wired up in `_build_pipeline()`. CAM_B feeds `stereo.left`, CAM_C feeds `stereo.right`. Configured with `HIGH_DENSITY` preset and `setDepthAlign(CAM_A)` so the depth map is reprojected to match the colour camera's field of view exactly — bounding box pixel coordinates from the colour frame can be used directly on the depth map without rescaling. Depth output queue is stored as `self._depth_queue` (maxSize=8, non-blocking). Only built when both CAM_B and CAM_C are present.
 - **IMU node:** created only if `record_gyroscope=True`. Enables `GYROSCOPE_RAW` at 100 Hz. Queue depth 50.
-- **Current limitation:** stereo depth (`dai.node.StereoDepth`) is NOT yet wired up. CAM_B and CAM_C exist as individual video queues only; they are not combined into a depth map yet. This is the planned work for `depth_perception/`.
 - `get_frame(cam_name)` → returns an OpenCV BGR/grayscale frame via `getCvFrame()`.
+- `get_depth_frame()` → returns the latest depth frame as `NDArray[np.uint16]` where pixel values are distances in millimetres. Returns `None` if the stereo node was not wired or no frame is ready yet.
 - `get_gyro_data()` → returns list of `{timestamp_s, x, y, z}` dicts from the latest IMU packet.
 
 ### `camera/camera_recording.py` — `CameraRecording` + `GyroRecorder`
@@ -142,13 +147,29 @@ Wraps the YOLO model.
 - `get_project_root()`: resolves from `__file__` location (3 levels up from `src/utils/`).
 - `load_yaml(path)`: loads and validates a YAML file, raises on missing or empty file.
 
-### `depth_perception/` — Work In Progress
-Package exists (`__init__.py` created). No modules yet. Planned contents:
-- `depth_zones.py` — obstacle zone analysis (left/centre/right zone danger classification from depth map)
-- `target_estimator.py` — 3D target position from bounding box + depth (Phase 2/3)
-- `fusion.py` — IMU + depth fusion helpers (Phase 4)
+### `depth_perception/target_estimator.py` — `TargetEstimator`
+Estimates distance and bearing for each YOLO detection using a stereo depth frame.
+- Stateless — single instance reused across frames.
+- Main method: `estimate(depth_frame, results, image_width) -> list[dict]`
+- **Distance:** crops the inner 20% of each bounding box (40% edge crop on each side, via `_EDGE_CROP = 0.4`). Filters invalid pixels (`< 1mm` or `> 10,000mm`). Takes `np.median` of valid pixels and converts to metres. If fewer than 10 valid pixels remain, `distance_m` is set to `None` to signal low confidence.
+- **Bearing:** normalised horizontal offset — `(box_centre_x - image_width / 2) / (image_width / 2)`. Range is [-1.0, +1.0]: negative = left of centre, positive = right of centre, 0 = dead ahead.
+- Returns one dict per detection with keys: `track_id`, `confidence`, `distance_m`, `bearing_normalised`, `bbox_xyxy`.
+- Constants: `_MIN_DEPTH_MM = 1`, `_MAX_DEPTH_MM = 10_000`, `_MIN_VALID_PIXELS = 10`, `_EDGE_CROP = 0.4`.
 
-This package will **consume** depth frames produced by `camera_access.py` (once the `StereoDepth` node is wired in). It does not interact with the camera hardware directly.
+**Current integration status:** `TargetEstimator` is not yet called from `pipeline.py`. The module exists and is correct but `_apply_inference()` has not been updated to call `get_depth_frame()` or pass estimates to `CameraTracking`.
+
+### `depth_perception/depth_zones.py` — `DepthZoneAnalyser` (placeholder)
+Classifies obstacle danger across three horizontal zones of the depth frame. Intended for future connection to the ROS2 `control_node` / `obstacle_avoidance_node` — **not yet wired to anything in the pipeline**.
+- Constructor accepts `danger_threshold_m: float = 2.0`.
+- `analyse(depth_frame) -> dict` divides the frame into equal-width left / centre / right columns. For each zone: filters invalid pixels, computes minimum valid depth in metres, classifies as `"danger"` (below threshold), `"clear"`, or `"unknown"` (no valid pixels).
+- Output format:
+  ```python
+  {
+      "left":   {"min_depth_m": float | None, "status": "clear" | "danger" | "unknown"},
+      "centre": {"min_depth_m": float | None, "status": "clear" | "danger" | "unknown"},
+      "right":  {"min_depth_m": float | None, "status": "clear" | "danger" | "unknown"},
+  }
+  ```
 
 ---
 
@@ -159,10 +180,14 @@ OAK-D Device
   ├── CAM_A (colour, 1920×1080) ──→ video queue ──→ get_frame("CAM_A") ──→ YOLO inference ──→ annotated frame ──→ record / display
   ├── CAM_B (mono,  640×400)   ──→ video queue ──→ get_frame("CAM_B") ──→ (no inference)  ──→ record / display
   ├── CAM_C (mono,  640×400)   ──→ video queue ──→ get_frame("CAM_C") ──→ (no inference)  ──→ record / display
+  ├── CAM_B + CAM_C ──→ StereoDepth node ──→ depth queue ──→ get_depth_frame() ──→ (not yet consumed by pipeline)
   └── IMU (GYROSCOPE_RAW 100Hz)──→ imu queue   ──→ get_gyro_data()    ──→ JSONL recording
 ```
 
-**Not yet wired:** CAM_B + CAM_C → `StereoDepth` node → depth map → `depth_perception/` module.
+**Wired but not yet integrated:** `get_depth_frame()` produces depth frames, and `TargetEstimator` + `DepthZoneAnalyser` are implemented and correct, but `pipeline.py` does not yet call them. The next pending changes are:
+1. Update `_apply_inference()` in `pipeline.py` to call `get_depth_frame()` and pass the result to `TargetEstimator.estimate()`.
+2. Update `CameraTracking.draw_detections()` to accept estimates and overlay distance labels via `cv2.putText()`.
+3. Update `_process_frame()` in `pipeline.py` so live view (`cv2.imshow`) only shows the colour camera (CAM_A), not all three cameras.
 
 ---
 
@@ -198,6 +223,13 @@ Saved to `output/recordings/`, timestamped per session (`YYYYMMDD_HHMMSS`):
 
 ---
 
-## Planned Next Step
+## Planned Next Steps
 
-Wire up `dai.node.StereoDepth` in `camera_access.py` using CAM_B and CAM_C as the stereo pair. Expose the resulting depth map via a new `get_depth_frame()` method. Build `depth_perception/depth_zones.py` to consume that depth map and classify obstacle zones, and `depth_perception/target_estimator.py` to associate detection bounding boxes with depth readings for 3D target positioning.
+Three pending changes remain from the depth perception work:
+
+1. **Integrate `TargetEstimator` into `pipeline.py`:** update `_apply_inference()` to call `self._camera.get_depth_frame()` and pass the depth frame + results to `TargetEstimator.estimate()`. Pass the returned estimates list to `CameraTracking.draw_detections()`.
+2. **Overlay distance on live view:** update `CameraTracking.draw_detections()` to accept an optional `estimates: list[dict] | None` parameter and use `cv2.putText()` to draw `"{distance_m:.2f}m"` labels in cyan above each bounding box.
+3. **Restrict live view to colour camera only:** update `_process_frame()` in `pipeline.py` so `cv2.imshow()` is only called when `self._camera.is_colour_camera(frame)` is True. All cameras continue to be recorded to disk.
+
+Future modules planned for `depth_perception/`:
+- `fusion.py` — IMU + depth fusion helpers (Phase 4)

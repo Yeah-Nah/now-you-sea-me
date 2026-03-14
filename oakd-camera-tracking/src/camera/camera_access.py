@@ -40,6 +40,7 @@ class CameraAccess:
         self._pipeline: dai.Pipeline | None = None
         self._video_queues: dict[str, dai.DataOutputQueue] = {}
         self._imu_queue: dai.DataOutputQueue | None = None
+        self._depth_queue: dai.DataOutputQueue | None = None
         self._camera_features: list[dai.CameraFeatures] = []
 
     def start(self) -> None:
@@ -111,6 +112,8 @@ class CameraAccess:
         if self._pipeline is None:
             raise RuntimeError("Pipeline not initialized")
 
+        mono_outputs: dict[str, object] = {}
+
         for cam_features in self._camera_features:
             cam_name = cam_features.socket.name
             is_colour = any(
@@ -118,12 +121,25 @@ class CameraAccess:
             )
             resolution = self._colour_resolution if is_colour else self._mono_resolution
             cam = self._pipeline.create(dai.node.Camera).build(cam_features.socket)
-            self._video_queues[cam_name] = cam.requestOutput(
-                resolution, fps=self._fps
-            ).createOutputQueue(maxSize=16, blocking=False)
+            output = cam.requestOutput(resolution, fps=self._fps)
+            self._video_queues[cam_name] = output.createOutputQueue(maxSize=16, blocking=False)
+            if not is_colour:
+                mono_outputs[cam_name] = output
             logger.debug(
                 f"Pipeline: added '{cam_name}' ({cam_features.sensorName}) "
                 f"at {resolution[0]}x{resolution[1]}."
+            )
+
+        if "CAM_B" in mono_outputs and "CAM_C" in mono_outputs:
+            stereo = self._pipeline.create(dai.node.StereoDepth)
+            stereo.setDefaultProfilePreset(dai.node.StereoDepth.PresetMode.HIGH_DENSITY)
+            stereo.setDepthAlign(dai.CameraBoardSocket.CAM_A)
+            mono_outputs["CAM_B"].link(stereo.left)  # type: ignore[union-attr]
+            mono_outputs["CAM_C"].link(stereo.right)  # type: ignore[union-attr]
+            self._depth_queue = stereo.depth.createOutputQueue(maxSize=8, blocking=False)
+            logger.debug(
+                "Pipeline: StereoDepth node wired "
+                "(CAM_B→left, CAM_C→right, aligned to CAM_A)."
             )
 
         if self._record_gyroscope:
@@ -186,6 +202,22 @@ class CameraAccess:
 
         return msg.getCvFrame()  # type: ignore[no-any-return]
 
+    def get_depth_frame(self) -> NDArray[np.uint16] | None:
+        """Return the most recent stereo depth frame, or None if not ready.
+
+        Depth pixel values are distances in millimetres encoded as uint16.
+        Returns None if the StereoDepth node was not wired (e.g. only one
+        mono camera present) or if no frame is available yet.
+
+        Returns
+        -------
+        NDArray[np.uint16] | None
+            Depth frame aligned to CAM_A, or None.
+        """
+        if self._depth_queue is None or not self._depth_queue.has():
+            return None
+        return self._depth_queue.get().getCvFrame()  # type: ignore[no-any-return]
+
     def get_gyro_data(self) -> list[dict[str, float]] | None:
         """Return parsed gyroscope readings from the latest IMU packet.
 
@@ -223,6 +255,7 @@ class CameraAccess:
         # Clear all instance state to prevent use-after-stop
         self._video_queues.clear()
         self._imu_queue = None
+        self._depth_queue = None
         self._camera_features.clear()
 
     def __enter__(self) -> CameraAccess:
