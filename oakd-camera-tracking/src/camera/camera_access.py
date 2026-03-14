@@ -115,24 +115,24 @@ class CameraAccess:
         """Build all pipeline nodes: cameras, stereo depth, and IMU."""
         if self._pipeline is None:
             raise RuntimeError("Pipeline not initialized")
-        mono_outputs, colour_socket = self._build_camera_nodes()
-        self._build_stereo_node(mono_outputs, colour_socket)
+        mono_cameras, colour_socket = self._build_camera_nodes()
+        self._build_stereo_node(mono_cameras, colour_socket)
         self._build_imu_node()
 
     def _build_camera_nodes(
         self,
-    ) -> tuple[list[tuple[str, object]], dai.CameraBoardSocket | None]:
+    ) -> tuple[list[tuple[str, dai.node.Camera]], dai.CameraBoardSocket | None]:
         """Create one Camera node per discovered sensor and populate video queues.
 
         Returns
         -------
-        tuple[list[tuple[str, object]], dai.CameraBoardSocket | None]
-            Mono camera outputs in device-reported order (each entry is
-            ``(cam_name, output_link)``), and the socket of the first colour
+        tuple[list[tuple[str, dai.node.Camera]], dai.CameraBoardSocket | None]
+            Mono camera nodes in device-reported order (each entry is
+            ``(cam_name, camera_node)``), and the socket of the first colour
             camera found (or None if no colour camera is present).
         """
         assert self._pipeline is not None
-        mono_outputs: list[tuple[str, object]] = []
+        mono_cameras: list[tuple[str, dai.node.Camera]] = []
         colour_socket: dai.CameraBoardSocket | None = None
 
         for cam_features in self._camera_features:
@@ -141,44 +141,46 @@ class CameraAccess:
             resolution = self._colour_resolution if is_colour else self._mono_resolution
             cam = self._pipeline.create(dai.node.Camera).build(cam_features.socket)
             output = cam.requestOutput(resolution, fps=self._fps)
-            self._video_queues[cam_name] = output.createOutputQueue(maxSize=16, blocking=False)
+            self._video_queues[cam_name] = output.createOutputQueue(
+                maxSize=16, blocking=False
+            )
             if is_colour and colour_socket is None:
                 colour_socket = cam_features.socket
             else:
-                mono_outputs.append((cam_name, output))
+                mono_cameras.append((cam_name, cam))
             logger.debug(
                 f"Pipeline: added '{cam_name}' ({cam_features.sensorName}) "
                 f"at {resolution[0]}x{resolution[1]}."
             )
 
-        return mono_outputs, colour_socket
+        return mono_cameras, colour_socket
 
     def _build_stereo_node(
         self,
-        mono_outputs: list[tuple[str, object]],
+        mono_cameras: list[tuple[str, dai.node.Camera]],
         colour_socket: dai.CameraBoardSocket | None,
     ) -> None:
         """Wire a StereoDepth node if at least two mono cameras and a colour camera exist.
 
         Parameters
         ----------
-        mono_outputs : list[tuple[str, object]]
-            Mono camera outputs in device-reported order. The first two entries
+        mono_cameras : list[tuple[str, dai.node.Camera]]
+            Mono camera nodes in device-reported order. The first two entries
             are used as the left and right stereo inputs respectively.
         colour_socket : dai.CameraBoardSocket | None
             Socket of the colour camera to align the depth map to, or None if
             no colour camera was found (stereo node will not be created).
         """
-        if len(mono_outputs) < 2 or colour_socket is None:
+        if len(mono_cameras) < 2 or colour_socket is None:
             return
         assert self._pipeline is not None
-        left_name, left_output = mono_outputs[0]
-        right_name, right_output = mono_outputs[1]
+        left_name, left_cam = mono_cameras[0]
+        right_name, right_cam = mono_cameras[1]
         stereo = self._pipeline.create(dai.node.StereoDepth)
         stereo.setDefaultProfilePreset(dai.node.StereoDepth.PresetMode.HIGH_DENSITY)
         stereo.setDepthAlign(colour_socket)
-        left_output.link(stereo.left)  # type: ignore[union-attr]
-        right_output.link(stereo.right)  # type: ignore[union-attr]
+        left_cam.link(stereo.left)
+        right_cam.link(stereo.right)
         self._depth_queue = stereo.depth.createOutputQueue(maxSize=8, blocking=False)
         logger.debug(
             f"Pipeline: StereoDepth node wired ({left_name}→left, "

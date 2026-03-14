@@ -34,7 +34,7 @@ class TargetEstimator:
         depth_frame: NDArray[np.uint16],
         results: Results,
         image_width: int,
-    ) -> list[dict]:
+    ) -> list[dict[str, float | int | None]]:
         """Estimate distance and bearing for every detection in *results*.
 
         Parameters
@@ -50,12 +50,12 @@ class TargetEstimator:
 
         Returns
         -------
-        list[dict]
+        list[dict[str, float | int | None]]
             One dict per detection with keys:
             ``track_id``, ``confidence``, ``distance_m``,
             ``bearing_normalised``, ``bbox_xyxy``.
         """
-        estimates: list[dict] = []
+        estimates: list[dict[str, float | int | None]] = []
 
         if results.boxes is None or len(results.boxes) == 0:
             return estimates

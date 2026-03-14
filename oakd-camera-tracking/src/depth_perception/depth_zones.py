@@ -39,7 +39,9 @@ class DepthZoneAnalyser:
     def __init__(self, danger_threshold_m: float = 2.0) -> None:
         self._danger_threshold_m = danger_threshold_m
 
-    def analyse(self, depth_frame: NDArray[np.uint16]) -> dict:
+    def analyse(
+        self, depth_frame: NDArray[np.uint16]
+    ) -> dict[str, dict[str, float | None | str]]:
         """Classify obstacle danger across left, centre, and right zones.
 
         Parameters
@@ -50,7 +52,7 @@ class DepthZoneAnalyser:
 
         Returns
         -------
-        dict
+        dict[str, dict[str, float | None | str]]
             Keys are ``"left"``, ``"centre"``, ``"right"``. Each value is a
             dict with:
 
@@ -62,9 +64,9 @@ class DepthZoneAnalyser:
         third = frame_w // 3
 
         slices = {
-            "left":   depth_frame[:, :third],
+            "left": depth_frame[:, :third],
             "centre": depth_frame[:, third : 2 * third],
-            "right":  depth_frame[:, 2 * third :],
+            "right": depth_frame[:, 2 * third :],
         }
 
         result: dict = {}
