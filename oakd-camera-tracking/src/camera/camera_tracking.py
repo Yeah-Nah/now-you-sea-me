@@ -40,5 +40,4 @@ class CameraTracking:
         """
         annotated: NDArray[np.uint8] = results.plot()
         n = len(results.boxes) if results.boxes is not None else 0
-        logger.debug(f"Drew {n} detection(s) on frame.")
         return annotated

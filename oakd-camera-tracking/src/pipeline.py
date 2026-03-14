@@ -51,6 +51,8 @@ class Pipeline:
         self._recording_started: dict[str, bool] = {}
         self._gyro_started: bool = False
         self._session_timestamp: str = self._generate_session_timestamp()
+        # Populated after camera.start() from hardware metadata.
+        self._colour_camera_names: set[str] = set()
 
     # ------------------------------------------------------------------ #
     # Properties                                                           #
@@ -130,6 +132,7 @@ class Pipeline:
             logger.error("Aborting pipeline: camera unavailable.")
             sys.exit(1)
 
+        self._colour_camera_names = self._camera.get_colour_camera_names()
         self._setup_recorders()
 
         try:
@@ -195,12 +198,16 @@ class Pipeline:
         self._lazy_start_recorder(cam_name, frame)
         self._lazy_start_gyro(cam_name)
 
-        display_frame = self._apply_inference(frame)
+        display_frame = (
+            self._apply_inference(frame)
+            if cam_name in self._colour_camera_names
+            else frame
+        )
 
         if cam_name in self._recorders:
             self._recorders[cam_name].write(display_frame)
 
-        if self.live_view_enabled:
+        if self.live_view_enabled and cam_name in self._colour_camera_names:
             cv2.imshow(f"OAK-D Feed - {cam_name}", display_frame)
 
     def _apply_inference(self, frame: NDArray[np.uint8]) -> NDArray[np.uint8]:

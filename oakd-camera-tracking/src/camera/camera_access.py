@@ -212,6 +212,18 @@ class CameraAccess:
         """
         return [f.socket.name for f in self._camera_features]
 
+    def get_colour_camera_names(self) -> set[str]:
+        """Return socket names of all colour (RGB) cameras.
+
+        Derived from hardware metadata; only populated after ``start()``.
+
+        Returns
+        -------
+        set[str]
+            Socket names of colour cameras (e.g. ``{"CAM_A"}``).
+        """
+        return {f.socket.name for f in self._camera_features if self._is_colour_sensor(f)}
+
     def is_colour_camera(self, frame: NDArray[np.uint8]) -> bool:
         """Determine if a given frame is from a colour camera based on its shape.
 
