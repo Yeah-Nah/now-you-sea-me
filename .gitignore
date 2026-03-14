@@ -215,3 +215,6 @@ oakd-camera-tracking/output/recordings/
 # Json files
 *.json
 *.jsonl
+
+# Models
+*.pt
