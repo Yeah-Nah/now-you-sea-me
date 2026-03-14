@@ -66,15 +66,15 @@ python run_pipeline.py --pipeline-config configs/pipeline_config.yaml
 |---|---|---|
 | `dev_or_pi` | `"dev"` | Target environment flag |
 | `live_view_enabled` | `True` | Show camera feed in OpenCV window |
-| `recording_enabled` | `True` | Write video frames to disk |
-| `inference_enabled` | `False` | Run YOLO detection on frames |
-| `record_gyroscope` | `True` | Capture IMU gyro data to JSONL |
+| `recording_enabled` | `False` | Write video frames to disk |
+| `inference_enabled` | `True` | Run YOLO detection on frames |
+| `record_gyroscope` | `False` | Capture IMU gyro data to JSONL |
 | `camera_feed_output_dir` | `"output/recordings/"` | Output directory |
 
 ### `model_config.yaml`
 | Key | Value |
 |---|---|
-| `model` | `18ft_skiff_yolo11n_20260210_195721.pt` |
+| `model` | `yolo11n.pt` |
 | `conf` | `0.7` |
 | `classes` | `[0]` (boat class) |
 | `persist` | `True` (multi-frame tracking enabled) |
@@ -123,7 +123,8 @@ check for 'q' keypress to quit
 The DepthAI hardware layer. Key behaviours:
 - On `start()`: opens a temporary device connection to **discover cameras dynamically** (socket name, sensor type, native resolution). Closes the temp connection, then builds the real DepthAI pipeline.
 - **Camera nodes:** one `dai.node.Camera` per discovered sensor. CAM_A is colour (1920×1080), CAM_B and CAM_C are mono (640×400, the stereo pair).
-- **Stereo depth node:** `dai.node.StereoDepth` is now wired up in `_build_pipeline()`. CAM_B feeds `stereo.left`, CAM_C feeds `stereo.right`. Configured with `HIGH_DENSITY` preset and `setDepthAlign(CAM_A)` so the depth map is reprojected to match the colour camera's field of view exactly — bounding box pixel coordinates from the colour frame can be used directly on the depth map without rescaling. Depth output queue is stored as `self._depth_queue` (maxSize=8, non-blocking). Only built when both CAM_B and CAM_C are present.
+- **Stereo depth node:** `dai.node.StereoDepth` is now wired up in `_build_pipeline()`. CAM_B feeds `stereo.left`, CAM_C feeds `stereo.right`. Configured with `DEFAULT` preset and `setDepthAlign(CAM_A)` so the depth map is reprojected to match the colour camera's field of view exactly — bounding box pixel coordinates from the colour frame can be used directly on the depth map without rescaling. Depth output queue is stored as `self._depth_queue` (maxSize=8, non-blocking). Only built when both CAM_B and CAM_C are present.
+- **Depth estimates integration:** `CameraTracking.draw_detections()` now accepts an optional `estimates` argument (list of per-detection dicts from `TargetEstimator`). When provided, it overlays distance labels above each bounding box using `cv2.putText()`, displaying `"{distance_m:.2f}m"` in cyan. This enables live annotation of detection distances in the colour camera feed.
 - **IMU node:** created only if `record_gyroscope=True`. Enables `GYROSCOPE_RAW` at 100 Hz. Queue depth 50.
 - `get_frame(cam_name)` → returns an OpenCV BGR/grayscale frame via `getCvFrame()`.
 - `get_colour_camera_names()` → returns a `set[str]` of socket names for all colour (RGB) sensors, derived from `_camera_features` hardware metadata. Only valid after `start()`.
@@ -135,7 +136,7 @@ The DepthAI hardware layer. Key behaviours:
 - `GyroRecorder`: writes gyro readings to a `.jsonl` file. Filename timestamp is synced to the primary camera's recording timestamp so both files can be aligned in post-processing.
 
 ### `camera/camera_tracking.py` — `CameraTracking`
-Stateless. Single method `draw_detections(frame, results)` calls `results.plot()` to generate an annotated frame with bounding boxes and track IDs drawn. The `frame` argument is accepted for API compatibility but the annotated output comes from YOLO directly. The method computes detection count (`n`) but does not yet log or use it — this is an incomplete stub left over from a planned depth overlay. Depth estimates are not yet accepted or drawn.
+Stateless. Single method `draw_detections(frame, results)` calls `results.plot()` to generate an annotated frame with bounding boxes, track IDs and estimated object depth. The `frame` argument is accepted for API compatibility but the annotated output comes from YOLO directly. The method computes detection count (`n`) but does not yet log or use it — this is an incomplete stub left over from a planned depth overlay. Depth estimates are not yet accepted or drawn.
 
 ### `inference/object_detection.py` — `ObjectDetection`
 Wraps the YOLO model.
@@ -156,8 +157,6 @@ Estimates distance and bearing for each YOLO detection using a stereo depth fram
 - **Bearing:** normalised horizontal offset — `(box_centre_x - image_width / 2) / (image_width / 2)`. Range is [-1.0, +1.0]: negative = left of centre, positive = right of centre, 0 = dead ahead.
 - Returns one dict per detection with keys: `track_id`, `confidence`, `distance_m`, `bearing_normalised`, `bbox_xyxy`.
 - Constants: `_MIN_DEPTH_MM = 1`, `_MAX_DEPTH_MM = 10_000`, `_MIN_VALID_PIXELS = 10`, `_EDGE_CROP = 0.4`.
-
-**Current integration status:** `TargetEstimator` is not yet called from `pipeline.py`. The module exists and is correct but `_apply_inference()` has not been updated to call `get_depth_frame()` or pass estimates to `CameraTracking`. This is the primary remaining pending work.
 
 ### `depth_perception/depth_zones.py` — `DepthZoneAnalyser` (placeholder)
 Classifies obstacle danger across three horizontal zones of the depth frame. Intended for future connection to the ROS2 `control_node` / `obstacle_avoidance_node` — **not yet wired to anything in the pipeline**.
