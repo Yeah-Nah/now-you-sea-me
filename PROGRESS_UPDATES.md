@@ -4,6 +4,37 @@ A development journey blog documenting the creation of a boat tracking system.
 
 # Phase 1: Creating Pipeline on Pi Device
 
+## Entry 5: Depth Perception — Distance Estimation & Zone Analysis
+*Date: March 14, 2026*
+
+Implemented a full **depth perception module** using the OAK-D's built-in stereo cameras, giving the pipeline real-time distance readouts for every detected boat and a danger-zone overlay for obstacle awareness:
+
+**StereoDepth Node Integration:**
+- Wired CAM_B (left mono) and CAM_C (right mono) into the OAK-D's on-device `StereoDepth` node using the `DEFAULT` preset
+- Depth frame is aligned to CAM_A (colour camera) so pixel coordinates match across streams
+- Depth output queue plumbed alongside the existing video queues in `CameraAccess`
+
+**New `depth_perception` Module:** 🥳🎉🎊
+- `TargetEstimator` — combines a stereo depth frame with YOLO detection boxes to produce per-detection estimates:
+  - **Distance** (metres) sampled from the inner 40% of each bounding box to reduce edge noise; invalid/out-of-range pixels are discarded
+  - **Normalised bearing** from frame centre for each target
+  - Structured `DetectionEstimate` output (track ID, confidence, distance, bearing, bbox)
+- `DepthZoneAnalyser` — divides the depth frame into equal left / centre / right columns and classifies each as `"clear"`, `"danger"`, or `"unknown"` against a configurable threshold (default 2 m); placeholder for future rover avoidance integration
+
+**Pipeline & Annotation Updates:**
+- `TargetEstimator` instantiated as part of the `Pipeline` and runs per-frame when inference is enabled
+- `CameraTracking.draw_detections()` updated to overlay distance labels (e.g. `3.2m`) on each bounding box in white with a black outline for contrast
+- Inference correctly gated to the colour camera feed only (bug fix)
+
+**Pipeline Refactor:**
+- `_build_pipeline` split into focused helper methods (`_build_camera_nodes`, etc.) to improve readability and maintainability
+
+Testing the depth perception with distance estimate annotation added to bounding box:
+
+<img src="other/images/Screenshot 2026-03-14 212013.png" alt="Testing Camera Connection" width="400">
+
+---
+
 ## Entry 4: Raspberry Pi Deployment & On-Device Recording
 *Date: March 8, 2026*
 
