@@ -1,84 +1,220 @@
-## Project Overview
-This project connects to an OAK-D camera, runs a YOLO model for boat detection, tracks detections across frames, and records video output based on configuration. The code is designed to be runnable on a development machine now and transferable to a Raspberry Pi edge device later with minimal changes.
+# UGV Rover — Object Detection & Avoidance: Phase Plan
 
-## High-Level Goals
-- Provide a clean, reusable pipeline for camera access, inference, tracking, and recording.
-- Keep implementation minimal and focused on core functionality.
-- Use configuration files to control behavior across environments (dev vs Raspberry Pi).
-- Ensure outputs can be saved to local storage for later use.
+## Project Goal
 
-## Core Workflow (High Level)
-- Load configuration (model + pipeline).
-- Initialize DepthAI camera pipeline and connect to the OAK-D device.
-- For each frame: optionally run inference, optionally draw tracking overlays, optionally write to video output.
-- Optionally capture gyroscope data and save alongside recordings.
-- Clean shutdown with safe device release and file flush.
+Build a self-driving robotic rover using:
+- **Waveshare UGV Rover** (hardware platform)
+- **Raspberry Pi** (compute)
+- **OAK-D Camera** (perception — depth + RGB)
+- **Custom YOLO model** (object detection)
+- **ROS2** (software framework)
 
-## Repository Structure (High Level)
-- `configs/` contains YAML config files that define model and pipeline settings.
-- `src/` contains reusable project code.
-- `src/camera/` handles camera access, tracking overlays, and recording responsibilities.
-- `src/inference/` contains the YOLO inference logic.
-- `src/utils/` contains config utilities and validation helpers.
-- `src/pipeline.py` orchestrates the flow between camera, inference, tracking, and recording.
-- `run_pipeline.py` is the entry point to run the full pipeline from the command line.
-- `models/` stores YOLO model files.
-- `output/` stores recordings and any generated artifacts.
+The rover will detect a target object, follow it autonomously, and navigate around obstacles in real time.
 
-## Configuration Expectations
-- The pipeline should be controlled by config values (enable/disable tracking, recording, live view, output paths).
-- Inference should be optional so the pipeline can record raw camera feed without running the model.
-- Model selection and inference settings should come from the model config file.
-- Default output should be in `output/` with timestamped file names.
-- Configs should support dev vs Raspberry Pi settings without code changes.
-- Keep config keys stable and documented to avoid breaking the pipeline.
+---
 
-## Config Keys (High Level)
-Keep the config schema stable. Expected keys (names can vary as long as intent is preserved):
-- camera: fps, resolution, color/mono selection, optional preview/visualize flag.
-- pipeline: inference_enabled, tracking_enabled, recording_enabled, live_view_enabled.
-- recording: output_dir, file_prefix, container/codec, segment_length (optional).
-- sensors: record_gyroscope (boolean to enable IMU capture).
-- model: model_path, input_size, labels_path, confidence_threshold.
-- runtime: device_target (dev vs pi), logging_level.
+## Role Requirements Coverage
 
-## Inputs and Outputs (High Level)
-- Inputs: OAK-D camera stream and the YOLO model weights.
-- Outputs: recorded video files, optional overlays if tracking is enabled, optional gyroscope data when enabled.
-- File naming: timestamp-based filenames for consistent ordering and traceability.
+### Grad Robotics Role
 
-## Model Details (High Level)
-- YOLO model format should be defined in config (path to weights and labels).
-- Input size and confidence threshold are config-driven.
-- Model loading should be validated before pipeline starts.
+| Requirement | Phase Achieved |
+|---|---|
+| Python programming | Already have / Phase 1 |
+| Fundamental robotics concepts | Phase 1–2 |
+| ROS/ROS2 experience | Phase 2 |
+| Sensors and actuators | Phase 1 |
+| Hardware integration | Phase 1 |
+| Git / version control | Already have |
+| Linux experience | Already have / Phase 1 |
 
-## Performance and Runtime Constraints (High Level)
-- Provide reasonable defaults for FPS and resolution for both dev and Raspberry Pi.
-- Favor stability over maximum throughput on Raspberry Pi.
-- Pipeline should run headless without a display when required.
+### Lead ML & Robotics Engineer Role
 
-## Error Handling Expectations (High Level)
-- Graceful failure if camera is not found or disconnects.
-- Clear error if model file or labels file is missing.
-- Ensure output directory is created if it does not exist.
+| Requirement | Phase Achieved |
+|---|---|
+| ROS2 proficiency | Phase 2 |
+| ONNX model export | Phase 3 |
+| OpenCV / computer vision | Already have / Phase 2 |
+| Real-time perception systems | Phase 2–3 |
+| Sensor fusion (depth + IMU) | Phase 4 |
+| Spatial transformations (TF2) | Phase 3 |
+| Camera calibration | Phase 3 |
 
-## CLI Usage (High Level)
-- `run_pipeline.py` is the single entry point.
-- It should load a config file and run the pipeline based on those settings.
+---
 
-## Raspberry Pi Portability
-- Keep device-specific values in config rather than code.
-- Avoid hard-coded absolute paths.
-- Keep the pipeline code modular so it can run the same way on a Pi with only config changes.
+## Phases
 
-## Runtime Assumptions
-- OAK-D is connected locally via USB and accessible by DepthAI.
-- Recording should continue uninterrupted when enabled.
-- Pipeline should be able to run headless (no display) on the Raspberry Pi.
+---
 
-## Implementation Notes
-- Use `loguru` for logging instead of print.
-- Keep tests minimal and only add what is required.
-- Do not add extra features beyond the core tracking and recording pipeline.
-- Favor clear class boundaries with minimal coupling between camera, inference, and recording.
-- Keep the entry point thin; main logic should live in `src/`.
+### Phase 0 — Existing Pipeline ✅ Complete
+
+**What's built:**
+- OAK-D camera access
+- YOLO inference (custom-trained boat detection model)
+- Object tracking across frames
+- Pipeline recording output
+- Configurable via YAML (dev machine / Pi modes)
+
+**Requirements ticked:**
+- Python programming
+- Computer vision with OpenCV
+- Real-time perception pipeline
+- Git and Linux basics
+
+---
+
+### Phase 1 — Hardware Integration
+
+**Goal:** Get the Raspberry Pi physically integrated with the UGV Rover and able to send basic motor commands.
+
+**Tasks:**
+- Flash **Ubuntu 22.04** onto Raspberry Pi (required for ROS2)
+- Physically mount Pi and OAK-D camera onto UGV Rover
+- Install Waveshare UGV Python SDK
+- Verify serial/USB communication between Pi and UGV motor controller
+- Test basic manual drive commands from Pi (forward, reverse, turn)
+- Port existing pipeline to run on Pi + Ubuntu
+
+**Requirements ticked:**
+- Sensors and actuators (OAK-D = sensor, motors = actuators)
+- Hardware integration (Pi → UGV)
+- Linux (Ubuntu on Pi)
+- Fundamental robotics concepts
+
+---
+
+### Phase 2 — ROS2 Integration & Object Following
+
+**Goal:** Port the pipeline into ROS2 nodes and implement basic object following using the YOLO detections and OAK-D depth data.
+
+**Tasks:**
+- Install **ROS2 Humble** on Ubuntu Pi
+- Restructure pipeline into ROS2 nodes:
+  - `oakd_node` — publishes RGB frames and depth maps
+  - `detection_node` — runs YOLO, publishes detections
+  - `tracking_node` — maintains tracked object across frames
+  - `control_node` — subscribes to tracked object, publishes motor commands
+- Implement object-following logic:
+  - Use detection bounding box centre to steer rover left/right
+  - Use OAK-D depth reading to control approach speed (stop before collision)
+- Write ROS2 launch file to start full pipeline with one command
+- Test object following end-to-end
+
+**Requirements ticked:**
+- ROS2 (nodes, topics, launch files)
+- Real-time perception system
+- Sensor integration (depth for distance control)
+- Python in a structured robotics framework
+
+---
+
+### Phase 3 — Obstacle Avoidance & Pipeline Optimisation
+
+**Goal:** Add obstacle avoidance using the OAK-D depth map and optimise the model for edge deployment.
+
+**Tasks:**
+- Implement depth-map-based obstacle avoidance in `control_node`:
+  - Divide depth frame into zones (left, centre, right)
+  - If centre zone depth is below threshold → stop or navigate around
+  - Combine with object-following logic (prioritise avoidance over following)
+- Export YOLO model to **ONNX** format
+  - Validate ONNX model output matches PyTorch output
+  - Integrate ONNX runtime into `detection_node` for faster inference
+- Set up **ROS2 TF2** transforms:
+  - Define camera frame → robot base frame transform
+  - Publish detection positions in robot coordinate space
+- Perform **OAK-D camera calibration** using OpenCV calibration tools
+  - Validate intrinsic parameters
+  - Feed calibrated parameters into depth pipeline
+
+**Requirements ticked:**
+- ONNX model export and deployment
+- Spatial transformations and coordinate system conversions (TF2)
+- Camera calibration techniques
+- Obstacle avoidance behaviour
+
+---
+
+### Phase 4 — Sensor Fusion & Advanced Navigation
+
+**Goal:** Improve navigation reliability by fusing multiple data sources and integrating the Nav2 stack.
+
+**Tasks:**
+- Integrate **IMU data** from UGV onboard IMU into ROS2:
+  - Publish IMU data as a ROS2 topic
+  - Fuse IMU + OAK-D depth for more robust obstacle detection
+  - Use IMU to detect and correct for rover tipping or slip
+- Integrate **Nav2 stack** for structured path planning:
+  - Build a local costmap from OAK-D depth data
+  - Use Nav2 local planner for reactive obstacle avoidance
+  - Allow rover to navigate around obstacles and resume object following
+- Add **ROS2 Bag** recording for logging sensor data during runs
+  - Use bags to replay and debug navigation behaviour offline
+
+**Requirements ticked:**
+- Sensor fusion algorithms (depth + IMU)
+- Advanced ROS2 (Nav2, costmaps, planners)
+- Real-time multi-source perception
+
+---
+
+### Phase 5 — Stretch Goals
+
+These are optional additions to further strengthen the portfolio:
+
+| Feature | What It Demonstrates |
+|---|---|
+| Swap Pi for **Jetson Orin NX** | CUDA, TensorRT, GPU-accelerated inference |
+| TensorRT model export | TensorRT experience (lead role requirement) |
+| Multi-object tracking (follow specific target in a crowd) | Advanced tracking algorithms |
+| Web dashboard for live rover telemetry | Full-stack robotics systems integration |
+| Train a new YOLO model on rover-specific objects | End-to-end ML pipeline ownership |
+
+---
+
+## Architecture Overview
+
+```
+OAK-D Camera
+    │
+    ▼
+[oakd_node]
+  publishes: /rgb/image, /depth/image
+    │
+    ▼
+[detection_node]  ←── Custom YOLO model (ONNX)
+  publishes: /detections
+    │
+    ▼
+[tracking_node]
+  publishes: /tracked_object
+    │
+    ├──────────────────────────┐
+    ▼                          ▼
+[control_node]         [obstacle_avoidance_node]
+  (object following)     (depth zone analysis)
+    │                          │
+    └──────────┬───────────────┘
+               ▼
+       /cmd_vel topic
+               │
+               ▼
+       UGV Motor Controller
+               │
+               ▼
+           Rover moves
+```
+
+---
+
+## Tech Stack Summary
+
+| Layer | Technology |
+|---|---|
+| Hardware | Waveshare UGV Rover, Raspberry Pi, OAK-D |
+| OS | Ubuntu 22.04 |
+| Robot Framework | ROS2 Humble |
+| Object Detection | YOLO (custom trained) → ONNX |
+| Computer Vision | OpenCV, DepthAI SDK |
+| Navigation | Nav2 stack |
+| Language | Python (primary) |
+| Version Control | Git |

@@ -40,6 +40,7 @@ class CameraAccess:
         self._pipeline: dai.Pipeline | None = None
         self._video_queues: dict[str, dai.DataOutputQueue] = {}
         self._imu_queue: dai.DataOutputQueue | None = None
+        self._depth_queue: dai.DataOutputQueue | None = None
         self._camera_features: list[dai.CameraFeatures] = []
 
     def start(self) -> None:
@@ -106,32 +107,97 @@ class CameraAccess:
         )
         return features
 
+    def _is_colour_sensor(self, cam_features: dai.CameraFeatures) -> bool:
+        """Return True if *cam_features* describes a colour (RGB) sensor."""
+        return any(t == dai.CameraSensorType.COLOR for t in cam_features.supportedTypes)
+
     def _build_pipeline(self) -> None:
-        """Build pipeline nodes for each discovered camera and the optional IMU."""
+        """Build all pipeline nodes: cameras, stereo depth, and IMU."""
         if self._pipeline is None:
             raise RuntimeError("Pipeline not initialized")
+        mono_cameras, colour_socket = self._build_camera_nodes()
+        self._build_stereo_node(mono_cameras, colour_socket)
+        self._build_imu_node()
+
+    def _build_camera_nodes(
+        self,
+    ) -> tuple[list[tuple[str, object]], dai.CameraBoardSocket | None]:
+        """Create one Camera node per discovered sensor and populate video queues.
+
+        Returns
+        -------
+        tuple[list[tuple[str, object]], dai.CameraBoardSocket | None]
+            Mono camera outputs in device-reported order (each entry is
+            ``(cam_name, output)``), and the socket of the first colour
+            camera found (or None if no colour camera is present).
+        """
+        assert self._pipeline is not None
+        mono_outputs: list[tuple[str, object]] = []
+        colour_socket: dai.CameraBoardSocket | None = None
 
         for cam_features in self._camera_features:
             cam_name = cam_features.socket.name
-            is_colour = any(
-                t == dai.CameraSensorType.COLOR for t in cam_features.supportedTypes
-            )
+            is_colour = self._is_colour_sensor(cam_features)
             resolution = self._colour_resolution if is_colour else self._mono_resolution
             cam = self._pipeline.create(dai.node.Camera).build(cam_features.socket)
-            self._video_queues[cam_name] = cam.requestOutput(
-                resolution, fps=self._fps
-            ).createOutputQueue(maxSize=16, blocking=False)
+            output = cam.requestOutput(resolution, fps=self._fps)
+            self._video_queues[cam_name] = output.createOutputQueue(
+                maxSize=16, blocking=False
+            )
+            if is_colour and colour_socket is None:
+                colour_socket = cam_features.socket
+            else:
+                mono_outputs.append((cam_name, output))
             logger.debug(
                 f"Pipeline: added '{cam_name}' ({cam_features.sensorName}) "
                 f"at {resolution[0]}x{resolution[1]}."
             )
 
-        if self._record_gyroscope:
-            imu = self._pipeline.create(dai.node.IMU)
-            imu.enableIMUSensor([dai.IMUSensor.GYROSCOPE_RAW], 100)
-            imu.setBatchReportThreshold(1)
-            imu.setMaxBatchReports(10)
-            self._imu_queue = imu.out.createOutputQueue(maxSize=50, blocking=False)
+        return mono_outputs, colour_socket
+
+    def _build_stereo_node(
+        self,
+        mono_outputs: list[tuple[str, object]],
+        colour_socket: dai.CameraBoardSocket | None,
+    ) -> None:
+        """Wire a StereoDepth node if at least two mono cameras and a colour camera exist.
+
+        Parameters
+        ----------
+        mono_outputs : list[tuple[str, object]]
+            Mono camera outputs in device-reported order. The first two entries
+            are used as the left and right stereo inputs respectively.
+        colour_socket : dai.CameraBoardSocket | None
+            Socket of the colour camera to align the depth map to, or None if
+            no colour camera was found (stereo node will not be created).
+        """
+        if len(mono_outputs) < 2 or colour_socket is None:
+            return
+        assert self._pipeline is not None
+        left_name, left_output = mono_outputs[0]
+        right_name, right_output = mono_outputs[1]
+        stereo = self._pipeline.create(dai.node.StereoDepth)
+        stereo.setDefaultProfilePreset(dai.node.StereoDepth.PresetMode.DEFAULT)
+        stereo.setDepthAlign(colour_socket)
+        stereo.setOutputSize(*self._colour_resolution)
+        left_output.link(stereo.left)  # type: ignore[attr-defined]
+        right_output.link(stereo.right)  # type: ignore[attr-defined]
+        self._depth_queue = stereo.depth.createOutputQueue(maxSize=8, blocking=False)
+        logger.debug(
+            f"Pipeline: StereoDepth node wired ({left_name}→left, "
+            f"{right_name}→right, aligned to {colour_socket.name})."
+        )
+
+    def _build_imu_node(self) -> None:
+        """Create and configure the IMU node if gyroscope recording is enabled."""
+        if not self._record_gyroscope:
+            return
+        assert self._pipeline is not None
+        imu = self._pipeline.create(dai.node.IMU)
+        imu.enableIMUSensor([dai.IMUSensor.GYROSCOPE_RAW], 100)
+        imu.setBatchReportThreshold(1)
+        imu.setMaxBatchReports(10)
+        self._imu_queue = imu.out.createOutputQueue(maxSize=50, blocking=False)
 
     def get_camera_names(self) -> list[str]:
         """Return the socket names of all discovered cameras.
@@ -145,6 +211,20 @@ class CameraAccess:
             Camera names in device-reported order.
         """
         return [f.socket.name for f in self._camera_features]
+
+    def get_colour_camera_names(self) -> set[str]:
+        """Return socket names of all colour (RGB) cameras.
+
+        Derived from hardware metadata; only populated after ``start()``.
+
+        Returns
+        -------
+        set[str]
+            Socket names of colour cameras (e.g. ``{"CAM_A"}``).
+        """
+        return {
+            f.socket.name for f in self._camera_features if self._is_colour_sensor(f)
+        }
 
     def is_colour_camera(self, frame: NDArray[np.uint8]) -> bool:
         """Determine if a given frame is from a colour camera based on its shape.
@@ -186,6 +266,22 @@ class CameraAccess:
 
         return msg.getCvFrame()  # type: ignore[no-any-return]
 
+    def get_depth_frame(self) -> NDArray[np.uint16] | None:
+        """Return the most recent stereo depth frame, or None if not ready.
+
+        Depth pixel values are distances in millimetres encoded as uint16.
+        Returns None if the StereoDepth node was not wired (e.g. only one
+        mono camera present) or if no frame is available yet.
+
+        Returns
+        -------
+        NDArray[np.uint16] | None
+            Depth frame aligned to CAM_A, or None.
+        """
+        if self._depth_queue is None or not self._depth_queue.has():
+            return None
+        return self._depth_queue.get().getCvFrame()  # type: ignore[no-any-return]
+
     def get_gyro_data(self) -> list[dict[str, float]] | None:
         """Return parsed gyroscope readings from the latest IMU packet.
 
@@ -223,6 +319,7 @@ class CameraAccess:
         # Clear all instance state to prevent use-after-stop
         self._video_queues.clear()
         self._imu_queue = None
+        self._depth_queue = None
         self._camera_features.clear()
 
     def __enter__(self) -> CameraAccess:
