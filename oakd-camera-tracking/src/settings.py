@@ -84,7 +84,7 @@ class Settings:
 
     @property
     def record_gyroscope(self) -> bool:
-        """Whether to capture gyroscope data from the IMU."""
+        """Whether to record gyroscope data to disk. The IMU node is always active."""
         return bool(self.pipeline_config.get("record_gyroscope", False))
 
     @property

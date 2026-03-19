@@ -91,7 +91,6 @@ class Pipeline:
     def _create_camera(self) -> CameraAccess:
         """Instantiate the camera access object."""
         return CameraAccess(
-            record_gyroscope=self._settings.record_gyroscope,
             fps=_FPS,
             colour_resolution=self._settings.colour_camera_resolution,
             mono_resolution=self._settings.mono_camera_resolution,
