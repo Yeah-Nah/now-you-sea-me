@@ -1,2 +1,4 @@
 colour_camera_resolution: [1920, 1080]  # Colour camera (CAM_A) resolution — reduced from native 4K to fit USB bandwidth
 mono_camera_resolution: [640, 400]      # Mono cameras (CAM_B, CAM_C) resolution — native resolution
+focal_length_px: 1400.0                 # Effective focal length in pixels at 1920×1080 for OAK-D IMX378 (tune per lens calibration)
+imu_cmc_enabled: false                  # Set true to enable IMU gyroscope camera motion compensation before YOLO inference

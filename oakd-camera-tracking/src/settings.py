@@ -102,6 +102,16 @@ class Settings:
         return int(w), int(h)
 
     @property
+    def focal_length_px(self) -> float:
+        """Effective focal length in pixels at the configured colour camera resolution."""
+        return float(self.camera_config.get("focal_length_px", 1400.0))
+
+    @property
+    def imu_cmc_enabled(self) -> bool:
+        """Whether to apply IMU-based camera motion compensation before inference."""
+        return bool(self.camera_config.get("imu_cmc_enabled", False))
+
+    @property
     def mono_camera_resolution(self) -> tuple[int, int]:
         """Output resolution for mono cameras (e.g. CAM_B, CAM_C)."""
         resolution: list[int] = self.camera_config.get(
