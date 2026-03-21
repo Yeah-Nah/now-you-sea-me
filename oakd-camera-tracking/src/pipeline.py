@@ -245,9 +245,10 @@ class Pipeline:
     ) -> NDArray[np.uint8]:
         """Run object detection and draw annotations if inference is enabled.
 
-        If a CMC warp matrix is provided, the frame is stabilised with
-        ``cv2.warpAffine`` before being passed to the detector, so that
-        camera rotation does not corrupt the Kalman filter predictions.
+        If a CMC warp matrix is provided, both the RGB frame and the depth
+        frame are stabilised with ``cv2.warpAffine`` before being passed to
+        the detector and depth estimator respectively, ensuring that bounding
+        box coordinates and depth samples share the same coordinate space.
 
         Parameters
         ----------
@@ -266,7 +267,9 @@ class Pipeline:
         if warp is not None:
             h, w = frame.shape[:2]
             frame = cv2.warpAffine(
-                frame, warp, (w, h),
+                frame,
+                warp,
+                (w, h),
                 flags=cv2.INTER_LINEAR,
                 borderMode=cv2.BORDER_REPLICATE,
             )
@@ -274,6 +277,15 @@ class Pipeline:
         if results is None or self._tracker is None:
             return frame
         depth_frame = self._camera.get_depth_frame()
+        if warp is not None and depth_frame is not None:
+            dh, dw = depth_frame.shape[:2]
+            depth_frame = cv2.warpAffine(
+                depth_frame,
+                warp,
+                (dw, dh),
+                flags=cv2.INTER_NEAREST,
+                borderMode=cv2.BORDER_REPLICATE,
+            )
         estimates = (
             self._estimator.estimate(depth_frame, results, frame.shape[1])
             if self._estimator is not None and depth_frame is not None
@@ -283,6 +295,8 @@ class Pipeline:
 
     def _poll_gyro(self) -> None:
         """Drain the IMU queue and fan readings out to recorder and CMC integrator."""
+        if self._gyro_recorder is None and self._imu_integrator is None:
+            return
         readings = self._camera.get_gyro_data()
         if not readings:
             return
