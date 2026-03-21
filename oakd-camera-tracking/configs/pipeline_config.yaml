@@ -3,5 +3,5 @@ dev_or_pi : "dev" # Set to "dev" for development environment, "pi" for Raspberry
 live_view_enabled : True # Whether to display the camera feed(s) in real-time. Boolean value.
 recording_enabled : False # Whether to record the camera feed(s) to disk. Boolean value.
 inference_enabled : True # Whether to run boat detection on the camera feed(s). Boolean value.
-record_gyroscope : False # Whether to record gyroscope data to disk. Boolean value.
+record_gyroscope : False # Whether to record gyroscope data to disk. The IMU node is always active; this only controls persistence. Boolean value.
 camera_feed_output_dir : "output/recordings/" # Directory to save recorded camera feeds (if recording enabled). Default is "output/recordings/".

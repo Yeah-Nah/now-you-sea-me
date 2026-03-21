@@ -20,20 +20,16 @@ class CameraAccess:
 
     Parameters
     ----------
-    record_gyroscope : bool
-        If True, enables the IMU node and exposes gyroscope readings.
     fps : int
         Target frames per second for each colourCamera node.
     """
 
     def __init__(
         self,
-        record_gyroscope: bool,
         fps: int = 30,
         colour_resolution: tuple[int, int] = (1920, 1080),
         mono_resolution: tuple[int, int] = (640, 400),
     ) -> None:
-        self._record_gyroscope = record_gyroscope
         self._fps = fps
         self._colour_resolution = colour_resolution
         self._mono_resolution = mono_resolution
@@ -189,9 +185,7 @@ class CameraAccess:
         )
 
     def _build_imu_node(self) -> None:
-        """Create and configure the IMU node if gyroscope recording is enabled."""
-        if not self._record_gyroscope:
-            return
+        """Create and configure the IMU node. Always active regardless of recording settings."""
         assert self._pipeline is not None
         imu = self._pipeline.create(dai.node.IMU)
         imu.enableIMUSensor([dai.IMUSensor.GYROSCOPE_RAW], 100)

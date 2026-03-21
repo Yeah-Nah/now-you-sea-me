@@ -18,6 +18,7 @@ from .camera.camera_access import CameraAccess
 from .camera.camera_recording import CameraRecording, GyroRecorder
 from .camera.camera_tracking import CameraTracking
 from .depth_perception.target_estimator import TargetEstimator
+from .imu.imu_integrator import ImuIntegrator
 from .inference.object_detection import ObjectDetection
 
 if TYPE_CHECKING:
@@ -46,6 +47,7 @@ class Pipeline:
         self._tracker = self._create_tracker()
         self._detector = self._create_detector()
         self._gyro_recorder = self._create_gyro_recorder()
+        self._imu_integrator = self._create_imu_integrator()
         self._estimator = self._create_estimator()
         # Populated in _setup_recorders() after camera connects so that
         # names are sourced from the device rather than hardcoded here.
@@ -91,7 +93,6 @@ class Pipeline:
     def _create_camera(self) -> CameraAccess:
         """Instantiate the camera access object."""
         return CameraAccess(
-            record_gyroscope=self._settings.record_gyroscope,
             fps=_FPS,
             colour_resolution=self._settings.colour_camera_resolution,
             mono_resolution=self._settings.mono_camera_resolution,
@@ -116,6 +117,12 @@ class Pipeline:
             return None
         return GyroRecorder(output_dir=self._settings.output_dir)
 
+    def _create_imu_integrator(self) -> ImuIntegrator | None:
+        """Create an IMU integrator for camera motion compensation if enabled."""
+        if not self._settings.imu_cmc_enabled:
+            return None
+        return ImuIntegrator(focal_length_px=self._settings.focal_length_px)
+
     def _create_estimator(self) -> TargetEstimator | None:
         """Create a depth estimator if inference is enabled."""
         return TargetEstimator() if self._settings.inference_enabled else None
@@ -139,6 +146,8 @@ class Pipeline:
             sys.exit(1)
 
         self._colour_camera_names = self._camera.get_colour_camera_names()
+        if self._imu_integrator is not None:
+            self._imu_integrator.reset()
         self._setup_recorders()
 
         try:
@@ -171,13 +180,18 @@ class Pipeline:
         while True:
             any_frame = False
 
+            self._poll_gyro()
+            warp = (
+                self._imu_integrator.get_warp_and_reset()
+                if self._imu_integrator is not None
+                else None
+            )
+
             for cam_name in self._camera.get_camera_names():
                 frame = self._camera.get_frame(cam_name)
                 if frame is not None:
-                    self._process_frame(cam_name, frame)
+                    self._process_frame(cam_name, frame, warp)
                     any_frame = True
-
-            self._poll_gyro()
 
             if not any_frame:
                 time.sleep(_IDLE_SLEEP_S)
@@ -191,7 +205,12 @@ class Pipeline:
     # Per-frame processing                                                 #
     # ------------------------------------------------------------------ #
 
-    def _process_frame(self, cam_name: str, frame: NDArray[np.uint8]) -> None:
+    def _process_frame(
+        self,
+        cam_name: str,
+        frame: NDArray[np.uint8],
+        warp: NDArray[np.float32] | None,
+    ) -> None:
         """Record, annotate, and optionally display one frame from a single camera.
 
         Parameters
@@ -200,12 +219,15 @@ class Pipeline:
             Camera identifier (e.g. ``"CAM_A"``).
         frame : NDArray[np.uint8]
             Raw BGR frame from the camera.
+        warp : NDArray[np.float32] | None
+            2×3 affine compensation matrix from the IMU integrator, or None
+            if camera motion compensation is disabled.
         """
         self._lazy_start_recorder(cam_name, frame)
         self._lazy_start_gyro(cam_name)
 
         display_frame = (
-            self._apply_inference(frame)
+            self._apply_inference(frame, warp)
             if cam_name in self._colour_camera_names
             else frame
         )
@@ -216,13 +238,23 @@ class Pipeline:
         if self.live_view_enabled and cam_name in self._colour_camera_names:
             cv2.imshow(f"OAK-D Feed - {cam_name}", display_frame)
 
-    def _apply_inference(self, frame: NDArray[np.uint8]) -> NDArray[np.uint8]:
+    def _apply_inference(
+        self,
+        frame: NDArray[np.uint8],
+        warp: NDArray[np.float32] | None,
+    ) -> NDArray[np.uint8]:
         """Run object detection and draw annotations if inference is enabled.
+
+        If a CMC warp matrix is provided, the frame is stabilised with
+        ``cv2.warpAffine`` before being passed to the detector, so that
+        camera rotation does not corrupt the Kalman filter predictions.
 
         Parameters
         ----------
         frame : NDArray[np.uint8]
             Raw BGR frame.
+        warp : NDArray[np.float32] | None
+            2×3 affine compensation matrix, or None to skip stabilisation.
 
         Returns
         -------
@@ -231,6 +263,13 @@ class Pipeline:
         """
         if self._detector is None:
             return frame
+        if warp is not None:
+            h, w = frame.shape[:2]
+            frame = cv2.warpAffine(
+                frame, warp, (w, h),
+                flags=cv2.INTER_LINEAR,
+                borderMode=cv2.BORDER_REPLICATE,
+            )
         results = self._detector.run(frame)
         if results is None or self._tracker is None:
             return frame
@@ -243,12 +282,14 @@ class Pipeline:
         return self._tracker.draw_detections(frame, results, estimates)
 
     def _poll_gyro(self) -> None:
-        """Drain the IMU queue and flush any new readings to disk."""
-        if self._gyro_recorder is None or not self._gyro_started:
-            return
+        """Drain the IMU queue and fan readings out to recorder and CMC integrator."""
         readings = self._camera.get_gyro_data()
-        if readings:
+        if not readings:
+            return
+        if self._gyro_recorder is not None and self._gyro_started:
             self._gyro_recorder.write(readings)
+        if self._imu_integrator is not None:
+            self._imu_integrator.update(readings)
 
     # ------------------------------------------------------------------ #
     # Lazy initialisation                                                  #

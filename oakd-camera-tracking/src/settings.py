@@ -84,7 +84,7 @@ class Settings:
 
     @property
     def record_gyroscope(self) -> bool:
-        """Whether to capture gyroscope data from the IMU."""
+        """Whether to record gyroscope data to disk. The IMU node is always active."""
         return bool(self.pipeline_config.get("record_gyroscope", False))
 
     @property
@@ -100,6 +100,16 @@ class Settings:
         )  # type: ignore[assignment]
         w, h = resolution[0], resolution[1]
         return int(w), int(h)
+
+    @property
+    def focal_length_px(self) -> float:
+        """Effective focal length in pixels at the configured colour camera resolution."""
+        return float(self.camera_config.get("focal_length_px", 1400.0))
+
+    @property
+    def imu_cmc_enabled(self) -> bool:
+        """Whether to apply IMU-based camera motion compensation before inference."""
+        return bool(self.camera_config.get("imu_cmc_enabled", False))
 
     @property
     def mono_camera_resolution(self) -> tuple[int, int]:
