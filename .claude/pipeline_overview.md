@@ -105,22 +105,33 @@ The central orchestrator. Owns the main loop and wires all components together.
 
 **Main loop `_main_loop()`:**
 ```
+poll gyro queue → flush readings to recorder (if record_gyroscope) and/or IMU integrator (if imu_cmc_enabled)
+  → early return if both gyro recorder and IMU integrator are None (avoids unnecessary queue drain)
+compute warp:
+  → if imu_cmc_enabled: warp = ImuIntegrator.get_warp_and_reset()
+       returns None if accumulated displacement < 0.5 px (no meaningful motion)
+  → else: warp = None
 for each camera:
     get frame
-    _process_frame(cam_name, frame)
+    _process_frame(cam_name, frame, warp)
         → lazy-start video recorder on first frame
         → lazy-start gyro recorder (synced to primary camera timestamp)
-        → _apply_inference(frame) if cam_name in _colour_camera_names else pass through
+        → _apply_inference(frame, warp) if cam_name in _colour_camera_names else pass through
         → write frame to recorder
         → show in OpenCV window only if live_view_enabled AND cam_name in _colour_camera_names
-poll gyro queue → flush readings to JSONL
 check for 'q' keypress to quit
 ```
 
-**`_apply_inference(frame)`:**
+**`_apply_inference(frame, warp)`:**
 ```
-run YOLO detector on frame
+if warp is not None:
+    stabilise RGB frame with cv2.warpAffine (INTER_LINEAR, BORDER_REPLICATE)
+run YOLO detector on (possibly stabilised) frame
 get depth frame from camera
+if warp is not None and depth frame available:
+    stabilise depth frame with cv2.warpAffine (INTER_NEAREST, BORDER_REPLICATE)
+    → brings depth map into the same coordinate space as the warped RGB frame
+      so TargetEstimator samples the correct depth region for each bounding box
 if depth frame available and estimator present:
     estimates = TargetEstimator.estimate(depth_frame, results, frame_width)
 else:
@@ -192,13 +203,15 @@ Classifies obstacle danger across three horizontal zones of the depth frame. Int
 
 ```
 OAK-D Device
-  ├── CAM_A (colour, 1920×1080) ──→ video queue ──→ get_frame("CAM_A") ──→ YOLO inference ──┐
-  │                                                                                           ├──→ draw_detections(estimates) ──→ annotated frame ──→ record + display
-  ├── CAM_B + CAM_C ──→ StereoDepth node ──→ depth queue ──→ get_depth_frame() ──→ TargetEstimator.estimate() ──┘
+  ├── CAM_A (colour, 1920×1080) ──→ video queue ──→ get_frame("CAM_A") ──→ [warp if CMC] ──→ YOLO inference ──┐
+  │                                                                                                             ├──→ draw_detections(estimates) ──→ annotated frame ──→ record + display
+  ├── CAM_B + CAM_C ──→ StereoDepth node ──→ depth queue ──→ get_depth_frame() ──→ [same warp if CMC] ──→ TargetEstimator.estimate() ──┘
   │
   ├── CAM_B (mono,  640×400)   ──→ video queue ──→ get_frame("CAM_B") ──→ (no inference) ──→ record only (not displayed)
   ├── CAM_C (mono,  640×400)   ──→ video queue ──→ get_frame("CAM_C") ──→ (no inference) ──→ record only (not displayed)
-  └── IMU (GYROSCOPE_RAW 100Hz, always active) ──→ imu queue ──→ get_gyro_data() ──→ JSONL recording (if record_gyroscope=True)
+  └── IMU (GYROSCOPE_RAW 100Hz, always active) ──→ imu queue ──→ get_gyro_data()
+        ├──→ JSONL recording (if record_gyroscope=True)
+        └──→ ImuIntegrator.update() ──→ get_warp_and_reset() → warp matrix (or None if motion < 0.5 px)
 ```
 
 ---
@@ -231,7 +244,9 @@ Saved to `output/recordings/`, timestamped per session (`YYYYMMDD_HHMMSS`). All 
 - **Lazy recorder init:** recorders are opened on the first frame so that frame dimensions do not need to be hardcoded.
 - **Session timestamp at init:** `_session_timestamp` is generated once at `Pipeline.__init__` and shared across all recorders (video + gyro), ensuring all output files for a session have the same timestamp.
 - **Gyro timestamp sync:** the JSONL gyro file shares its timestamp with the primary camera's video file, enabling post-processing alignment.
-- **IMU always active:** the IMU node is always wired in the DepthAI pipeline. `record_gyroscope` only controls whether readings are written to disk.
+- **IMU always active:** the IMU node is always wired in the DepthAI pipeline. `record_gyroscope` only controls whether readings are written to disk. `_poll_gyro()` skips the queue drain entirely when both gyro recording and CMC are disabled.
+- **CMC depth alignment:** when `imu_cmc_enabled` is True, the same affine warp applied to the RGB frame is also applied to the depth frame (using `INTER_NEAREST` to preserve raw millimetre values). This ensures bounding boxes from YOLO and depth samples from `TargetEstimator` always share the same coordinate space.
+- **Trivial warp guard:** `ImuIntegrator.get_warp_and_reset()` returns `None` when the accumulated displacement is below 0.5 px in both axes, allowing the caller to skip `cv2.warpAffine` entirely on frames with negligible camera motion.
 - **Depth always fetched when available:** `_apply_inference()` always attempts to fetch a depth frame. If one is not ready (no stereo node, or frame not yet in queue), `estimates` falls back to an empty list and no distance labels are drawn.
 - **Stateless tracker and estimator:** `CameraTracking` and `TargetEstimator` hold no frame-to-frame state. YOLO maintains its own internal track state when `persist=True`.
 - **Inference is optional:** `inference_enabled: False` in config skips YOLO, depth estimation, and distance overlay entirely. The pipeline runs as a plain recorder.
